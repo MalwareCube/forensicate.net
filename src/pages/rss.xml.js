@@ -1,6 +1,6 @@
 import rss from '@astrojs/rss';
 import { site } from '../site.config.ts';
-import { getAllPosts, postPath } from '../lib/posts.ts';
+import { getAllPosts, postPath, excerpt } from '../lib/posts.ts';
 
 export async function GET(context) {
   const posts = await getAllPosts();
@@ -10,7 +10,7 @@ export async function GET(context) {
     site: context.site ?? site.url,
     items: posts.map((post) => ({
       title: post.data.title,
-      description: post.data.description ?? '',
+      description: excerpt(post),
       pubDate: post.data.pubDate,
       link: postPath(post),
       categories: post.data.tags,
