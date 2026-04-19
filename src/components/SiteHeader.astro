@@ -76,17 +76,49 @@ function isCurrent(href: string): boolean {
 </style>
 <nav class="site-nav" aria-label="Primary">
   <div class="site-nav-inner">
-    <ul>
-      {nav.map((link) => (
-        <li>
-          <a href={link.href} aria-current={isCurrent(link.href) ? 'page' : undefined}>{link.label}</a>
-        </li>
-      ))}
-    </ul>
-    <form class="site-search" role="search" action="/search/" method="get">
-      <label class="visually-hidden" for="site-search-input">Search</label>
-      <Icon name="lucide:search" class="site-search-icon" aria-hidden="true" />
-      <input id="site-search-input" type="search" name="q" placeholder="Search..." autocomplete="off" />
-    </form>
+    <button
+      type="button"
+      class="nav-toggle"
+      aria-expanded="false"
+      aria-controls="site-nav-menu"
+      aria-label="Toggle menu"
+    >
+      <span class="nav-toggle-bar"></span>
+      <span class="nav-toggle-bar"></span>
+      <span class="nav-toggle-bar"></span>
+    </button>
+    <div id="site-nav-menu" class="site-nav-menu">
+      <ul>
+        {nav.map((link) => (
+          <li>
+            <a href={link.href} aria-current={isCurrent(link.href) ? 'page' : undefined}>{link.label}</a>
+          </li>
+        ))}
+      </ul>
+      <form class="site-search" role="search" action="/search/" method="get">
+        <label class="visually-hidden" for="site-search-input">Search</label>
+        <Icon name="lucide:search" class="site-search-icon" aria-hidden="true" />
+        <input id="site-search-input" type="search" name="q" placeholder="Search..." autocomplete="off" />
+      </form>
+    </div>
   </div>
 </nav>
+
+<script is:inline>
+  (function () {
+    const nav = document.querySelector('.site-nav');
+    const btn = nav && nav.querySelector('.nav-toggle');
+    if (!nav || !btn) return;
+    btn.addEventListener('click', function () {
+      const open = nav.classList.toggle('open');
+      btn.setAttribute('aria-expanded', String(open));
+    });
+    document.addEventListener('keydown', function (e) {
+      if (e.key === 'Escape' && nav.classList.contains('open')) {
+        nav.classList.remove('open');
+        btn.setAttribute('aria-expanded', 'false');
+        btn.focus();
+      }
+    });
+  })();
+</script>
