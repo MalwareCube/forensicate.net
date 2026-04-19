@@ -1,0 +1,35 @@
+---
+import type { GetStaticPaths } from 'astro';
+import BaseLayout from '~/layouts/BaseLayout.astro';
+import PostCard from '~/components/PostCard.astro';
+import PostsSubNav from '~/components/PostsSubNav.astro';
+import { getAllPosts, monthName, pad2, type Post } from '~/lib/posts';
+
+export const getStaticPaths: GetStaticPaths = async () => {
+  const posts = await getAllPosts();
+  const map = new Map<string, Post[]>();
+  for (const p of posts) {
+    const y = p.data.pubDate.getUTCFullYear();
+    const m = p.data.pubDate.getUTCMonth() + 1;
+    const key = `${y}-${pad2(m)}`;
+    if (!map.has(key)) map.set(key, []);
+    map.get(key)!.push(p);
+  }
+  return Array.from(map.entries()).map(([key, posts]) => {
+    const [year, month] = key.split('-');
+    return {
+      params: { year, month },
+      props: { year: Number(year), month: Number(month), posts },
+    };
+  });
+};
+
+interface Props { year: number; month: number; posts: Post[]; }
+const { year, month, posts } = Astro.props;
+---
+<BaseLayout title={`${monthName(month)} ${year}`}>
+  <PostsSubNav />
+  <h1>Archive: {monthName(month)} {year}</h1>
+  <p class="post-meta">{posts.length} {posts.length === 1 ? 'post' : 'posts'}</p>
+  {posts.map((p) => <PostCard post={p} />)}
+</BaseLayout>

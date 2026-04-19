@@ -1,0 +1,121 @@
+#ioc-results {
+  margin-top: 0.8em;
+}
+
+.ioc-group {
+  margin: 0 0 1em;
+  border: 1px solid var(--border);
+  background: #fff;
+}
+.ioc-group-header {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  padding: 0.4em 0.7em;
+  background: #f0f0f0;
+  border-bottom: 1px solid var(--border);
+}
+.ioc-group-label {
+  font-family: var(--sans);
+  font-size: 0.78em;
+  text-transform: uppercase;
+  letter-spacing: 0.1em;
+  font-weight: bold;
+  color: var(--text);
+}
+.ioc-group-count {
+  font-family: var(--mono);
+  font-size: 0.78em;
+  color: var(--text-muted);
+}
+
+.ioc-list {
+  list-style: none;
+  counter-reset: ioc;
+  padding: 0;
+  margin: 0;
+}
+.ioc-list li {
+  counter-increment: ioc;
+  display: flex;
+  align-items: baseline;
+  gap: 0.8em;
+  padding: 0.3em 0.7em;
+  font-family: var(--mono);
+  font-size: 0.9em;
+  word-break: break-all;
+}
+.ioc-list li + li {
+  border-top: 1px dotted var(--border);
+}
+.ioc-list li:nth-child(even) {
+  background: #f7f7f7;
+}
+.ioc-list li::before {
+  content: counter(ioc);
+  flex: 0 0 auto;
+  min-width: 1.8em;
+  text-align: right;
+  color: var(--text-muted);
+  font-size: 0.85em;
+  user-select: none;
+}
+.ioc-val {
+  flex: 1 1 auto;
+}
+
+.ioc-del {
+  flex: 0 0 auto;
+  background: none;
+  border: 0;
+  padding: 0 0.2em;
+  margin: 0;
+  font-family: var(--sans);
+  font-size: 1.1em;
+  line-height: 1;
+  color: var(--text-muted);
+  cursor: pointer;
+  opacity: 0.45;
+  transition: opacity 0.12s, color 0.12s;
+}
+.ioc-list li:hover .ioc-del {
+  opacity: 0.85;
+}
+.ioc-del:hover,
+.ioc-del:focus {
+  opacity: 1;
+  color: #c13030;
+  outline: none;
+}
+
+.ioc-list li.ioc-warn {
+  background: #fff6d9;
+  box-shadow: inset 3px 0 0 #d9a200;
+}
+.ioc-list li.ioc-warn:nth-child(even) {
+  background: #fdf1cc;
+}
+.ioc-flag {
+  flex: 0 0 auto;
+  font-family: var(--sans);
+  font-size: 0.7em;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: #8a6400;
+  border: 1px solid #d9a200;
+  background: #fff;
+  padding: 0.1em 0.4em;
+  border-radius: 2px;
+  cursor: help;
+}
+
+.ioc-empty {
+  color: var(--text-muted);
+  font-family: var(--sans);
+  font-size: 0.9em;
+}
+
+.controls-footer {
+  margin-top: 0.8em;
+  justify-content: flex-end;
+}

@@ -1,0 +1,384 @@
+---
+import BaseLayout from '~/layouts/BaseLayout.astro';
+import './styles.css';
+---
+<BaseLayout title="File Entropy Calculator" description="Drop a file to compute Shannon entropy for the whole file and for fixed-size windows. Useful for spotting packed or encrypted regions. Files are processed entirely in your browser, so nothing ever leaves your machine.">
+  <h1>File Entropy Calculator</h1>
+  <p>
+    Drop a file to compute its <strong><a href="https://en.wikipedia.org/wiki/Entropy_(information_theory)" target="_blank" rel="noopener noreferrer">Shannon entropy</a></strong> for the whole file and for fixed-size windows plotted across it.
+    High-entropy regions (near 8.0 bits/byte) suggest compression or encryption. Entropy
+    analysis is a common hunting technique for spotting packed sections in binaries and
+    encrypted payloads hidden inside documents.
+  </p>
+  <p class="post-meta">Files are processed entirely in your browser, so nothing ever leaves your machine.</p>
+
+  <div class="decoder" id="ent">
+    <div class="drop-zone" id="ent-drop">
+      <p>Drop a file here, or use the file picker:</p>
+      <input type="file" id="ent-file" />
+    </div>
+
+    <div class="controls">
+      <label style="display:inline-flex; gap:0.5em; align-items:center;">
+        Window size
+        <select id="ent-window">
+          <option value="256">256 B</option>
+          <option value="1024" selected>1 KiB</option>
+          <option value="4096">4 KiB</option>
+          <option value="16384">16 KiB</option>
+        </select>
+      </label>
+      <button type="button" data-action="clear" style="margin-left: auto;">Clear</button>
+    </div>
+
+    <div id="ent-summary"></div>
+    <div id="ent-chart-wrap" style="display:none;">
+      <p class="ent-chart-title">Entropy across file (bits/byte)</p>
+      <div id="ent-chart"></div>
+      <p class="ent-chart-hint">Scroll to zoom, horizontal scroll (or shift+scroll) to pan, click-drag a region to zoom in, double-click to reset.</p>
+    </div>
+    <p class="error" id="ent-error" role="status" aria-live="polite"></p>
+  </div>
+
+  <h2>How it works</h2>
+  <p>
+    Shannon entropy measures how unpredictable the byte values in a file are. For byte-level
+    data it ranges from 0 (every byte identical) to 8 (every byte value equally likely). Plain
+    text and structured binary data land in the middle, while compressed or encrypted data
+    sits near the top.
+  </p>
+  <p>The tool reports two measurements:</p>
+  <ul>
+    <li><strong>Overall entropy</strong> across the entire file, giving a single headline number.</li>
+    <li><strong>Windowed entropy</strong> computed in chunks of the selected window size and plotted over the file's byte offset.</li>
+  </ul>
+  <p>
+    Windowing surfaces localized regions that the overall number would hide. A mostly
+    plaintext binary with one encrypted blob in the middle looks unremarkable in aggregate,
+    but produces a visible spike on the chart at the blob's offset.
+  </p>
+  <p>
+    High entropy is not evidence of malicious intent on its own. Legitimate formats such as
+    PNG, JPEG, ZIP, and signed executables all contain compressed sections, so treat it as a
+    signal worth investigating alongside other artifacts.
+  </p>
+
+  <script>
+    import uPlot from 'uplot';
+    import 'uplot/dist/uPlot.min.css';
+
+    (function () {
+      const root = document.getElementById('ent');
+      if (!root) return;
+      const drop = root.querySelector('#ent-drop');
+      const fileInput = root.querySelector('#ent-file');
+      const windowSel = root.querySelector('#ent-window');
+      const summary = root.querySelector('#ent-summary');
+      const chartEl = root.querySelector('#ent-chart');
+      const chartWrap = root.querySelector('#ent-chart-wrap');
+      const error = root.querySelector('#ent-error');
+      let currentFile = null;
+      let currentBytes = null;
+      let plot = null;
+      let analyzeToken = 0;
+      function setError(m) { error.textContent = m || ''; }
+      function resetOutputs() {
+        summary.textContent = '';
+        chartWrap.style.display = 'none';
+        if (plot) { plot.destroy(); plot = null; }
+      }
+
+      function shannon(counts, total) {
+        let h = 0;
+        for (const c of counts) {
+          if (!c) continue;
+          const p = c / total;
+          h -= p * Math.log2(p);
+        }
+        return h;
+      }
+
+      function overallEntropy(bytes) {
+        const counts = new Uint32Array(256);
+        for (let i = 0; i < bytes.length; i++) counts[bytes[i]]++;
+        return shannon(counts, bytes.length);
+      }
+
+      function windowEntropies(bytes, win) {
+        const out = [];
+        const full = Math.floor(bytes.length / win);
+        const counts = new Uint32Array(256);
+        for (let w = 0; w < full; w++) {
+          counts.fill(0);
+          const start = w * win;
+          for (let i = start; i < start + win; i++) counts[bytes[i]]++;
+          out.push(shannon(counts, win));
+        }
+        return out;
+      }
+
+      function updateWindowOptions(fileSize) {
+        const opts = windowSel.options;
+        let firstEnabled = -1;
+        for (let i = 0; i < opts.length; i++) {
+          const val = parseInt(opts[i].value, 10);
+          const tooBig = val > fileSize;
+          opts[i].hidden = tooBig;
+          opts[i].disabled = tooBig;
+          if (!tooBig && firstEnabled === -1) firstEnabled = i;
+        }
+        if (opts[windowSel.selectedIndex] && opts[windowSel.selectedIndex].hidden && firstEnabled !== -1) {
+          windowSel.selectedIndex = firstEnabled;
+        }
+      }
+
+      function entropyClass(h) {
+        if (h < 6) return '';
+        if (h < 7.5) return 'ent-high';
+        return 'ent-max';
+      }
+
+      function fmtEntropy(h) {
+        return (Math.floor(h * 1000) / 1000).toFixed(3);
+      }
+
+      function clampScale(min, max, dMin, dMax) {
+        const range = max - min;
+        if (range >= dMax - dMin) return { min: dMin, max: dMax };
+        if (min < dMin) return { min: dMin, max: dMin + range };
+        if (max > dMax) return { min: dMax - range, max: dMax };
+        return { min, max };
+      }
+
+      function formatBytes(n) {
+        if (n >= 1024 * 1024 * 1024) return (n / (1024 * 1024 * 1024)).toFixed(2) + ' GiB';
+        if (n >= 1024 * 1024) return (n / (1024 * 1024)).toFixed(2) + ' MiB';
+        if (n >= 1024) return (n / 1024).toFixed(1) + ' KiB';
+        return n + ' B';
+      }
+
+      function chartSize() {
+        const w = chartEl.clientWidth || chartEl.getBoundingClientRect().width || 800;
+        return { width: Math.max(320, Math.floor(w)), height: 280 };
+      }
+
+      function renderChart(values, win) {
+        chartWrap.style.display = '';
+        const xs = new Float64Array(values.length);
+        const ys = new Float64Array(values.length);
+        for (let i = 0; i < values.length; i++) {
+          xs[i] = i * win;
+          ys[i] = values[i];
+        }
+        const size = chartSize();
+        const opts = {
+          ...size,
+          cursor: {
+            drag: { x: true, y: false, setScale: true },
+            sync: { key: 'ent' },
+          },
+          hooks: {
+            init: [
+              (u) => {
+                u.over.addEventListener('dblclick', () => {
+                  const dataX = u.data[0];
+                  if (!dataX || dataX.length === 0) return;
+                  u.setScale('x', { min: dataX[0], max: dataX[dataX.length - 1] });
+                });
+                u.over.addEventListener('wheel', (e) => {
+                  e.preventDefault();
+                  const d = u.data[0];
+                  if (!d || d.length === 0) return;
+                  const dMin = d[0];
+                  const dMax = d[d.length - 1];
+                  const xMin = u.scales.x.min;
+                  const xMax = u.scales.x.max;
+                  const xRange = xMax - xMin;
+                  const plotWidthPx = u.bbox.width / (window.devicePixelRatio || 1);
+
+                  const pan = e.shiftKey || Math.abs(e.deltaX) > Math.abs(e.deltaY);
+                  if (pan) {
+                    const delta = e.shiftKey ? e.deltaY : e.deltaX;
+                    if (delta === 0) return;
+                    const panAmount = (delta / plotWidthPx) * xRange;
+                    u.setScale('x', clampScale(xMin + panAmount, xMax + panAmount, dMin, dMax));
+                    return;
+                  }
+
+                  if (e.deltaY === 0) return;
+                  const left = u.cursor.left;
+                  if (left == null || left < 0) return;
+                  const xVal = u.posToVal(left, 'x');
+                  const factor = e.deltaY < 0 ? 0.85 : 1 / 0.85;
+                  const nextRange = xRange * factor;
+                  const leftFrac = (xVal - xMin) / xRange;
+                  const nextMin = xVal - leftFrac * nextRange;
+                  u.setScale('x', clampScale(nextMin, nextMin + nextRange, dMin, dMax));
+                }, { passive: false });
+              },
+            ],
+          },
+          scales: {
+            x: { time: false },
+            y: { range: [0, 8] },
+          },
+          axes: [
+            {
+              values: (u, vs) => vs.map((v) => formatBytes(Math.max(0, Math.round(v)))),
+              grid: { stroke: '#eee' },
+              stroke: '#555',
+            },
+            {
+              values: (u, vs) => vs.map((v) => v.toFixed(1)),
+              grid: { stroke: '#eee' },
+              stroke: '#555',
+              size: 46,
+            },
+          ],
+          series: [
+            {
+              label: 'Offset',
+              value: (u, v) => v == null ? '' : formatBytes(Math.round(v)),
+            },
+            {
+              label: 'Entropy',
+              stroke: '#1a0dab',
+              width: 1.4,
+              points: { show: false },
+              value: (u, v) => v == null ? '' : fmtEntropy(v) + ' bits/byte',
+            },
+          ],
+          legend: { live: true },
+        };
+
+        if (plot) { plot.destroy(); plot = null; }
+        plot = new uPlot(opts, [xs, ys], chartEl);
+      }
+
+      window.addEventListener('resize', () => {
+        if (plot) plot.setSize(chartSize());
+      });
+
+      async function analyze(file) {
+        setError('');
+        if (!file) return;
+        if (file.size > 256 * 1024 * 1024) {
+          setError('File too large. Max size is 256 MiB.');
+          fileInput.value = '';
+          currentFile = null;
+          currentBytes = null;
+          resetOutputs();
+          return;
+        }
+        if (file.size === 0) {
+          setError('File is empty.');
+          fileInput.value = '';
+          currentFile = null;
+          currentBytes = null;
+          resetOutputs();
+          return;
+        }
+        const myToken = ++analyzeToken;
+        let bytes;
+        if (file === currentFile && currentBytes) {
+          bytes = currentBytes;
+          updateWindowOptions(file.size);
+        } else {
+          updateWindowOptions(file.size);
+          const buf = await file.arrayBuffer();
+          if (myToken !== analyzeToken) return;
+          bytes = new Uint8Array(buf);
+          currentFile = file;
+          currentBytes = bytes;
+        }
+        const overall = overallEntropy(bytes);
+        const win = parseInt(windowSel.value, 10);
+        const hasWindows = win <= bytes.length;
+        const wins = hasWindows ? windowEntropies(bytes, win) : [];
+        let hi = -Infinity, lo = Infinity, sum = 0;
+        for (const v of wins) { if (v > hi) hi = v; if (v < lo) lo = v; sum += v; }
+        const mean = wins.length ? sum / wins.length : 0;
+
+        summary.textContent = '';
+        const tbl = document.createElement('table');
+        const tbody = document.createElement('tbody');
+        const rows = [
+          { k: 'File', v: file.name },
+          { k: 'Size', v: bytes.length.toLocaleString() + ' bytes (' + formatBytes(bytes.length) + ')' },
+          { k: 'Overall entropy', v: fmtEntropy(overall) + ' bits/byte', h: overall },
+        ];
+        if (wins.length > 0) {
+          rows.push(
+            { k: 'Window size', v: win.toLocaleString() + ' bytes (' + formatBytes(win) + ')' },
+            { k: 'Windows', v: wins.length.toLocaleString() },
+            { k: 'Min window', v: fmtEntropy(lo) + ' bits/byte', h: lo },
+            { k: 'Mean window', v: fmtEntropy(mean) + ' bits/byte', h: mean },
+            { k: 'Max window', v: fmtEntropy(hi) + ' bits/byte', h: hi },
+          );
+        } else {
+          rows.push({ k: 'Windowed', v: 'File smaller than the smallest window size.' });
+        }
+        for (const row of rows) {
+          const tr = document.createElement('tr');
+          const th = document.createElement('th'); th.scope = 'row'; th.textContent = row.k;
+          const td = document.createElement('td');
+          if (typeof row.h === 'number' && isFinite(row.h)) {
+            const cls = entropyClass(row.h);
+            if (cls) {
+              const span = document.createElement('span');
+              span.className = 'ent-val ' + cls;
+              span.textContent = row.v;
+              td.appendChild(span);
+            } else {
+              td.textContent = row.v;
+            }
+          } else {
+            td.textContent = row.v;
+          }
+          tr.appendChild(th); tr.appendChild(td);
+          tbody.appendChild(tr);
+          if (row.k === 'Overall entropy') {
+            const spacer = document.createElement('tr');
+            spacer.className = 'ent-spacer';
+            const spacerTd = document.createElement('td');
+            spacerTd.colSpan = 2;
+            spacer.appendChild(spacerTd);
+            tbody.appendChild(spacer);
+          }
+        }
+        tbl.appendChild(tbody);
+        summary.appendChild(tbl);
+        if (wins.length > 0) {
+          renderChart(wins, win);
+        } else {
+          chartWrap.style.display = 'none';
+          if (plot) { plot.destroy(); plot = null; }
+        }
+      }
+
+      fileInput.addEventListener('change', () => analyze(fileInput.files[0]));
+      drop.addEventListener('dragover', (e) => { e.preventDefault(); drop.classList.add('hover'); });
+      drop.addEventListener('dragleave', () => drop.classList.remove('hover'));
+      drop.addEventListener('drop', (e) => {
+        e.preventDefault();
+        drop.classList.remove('hover');
+        const f = e.dataTransfer.files && e.dataTransfer.files[0];
+        if (f) analyze(f);
+      });
+      windowSel.addEventListener('change', () => {
+        if (currentFile) analyze(currentFile);
+      });
+      root.querySelector('[data-action="clear"]').addEventListener('click', () => {
+        fileInput.value = '';
+        currentFile = null;
+        currentBytes = null;
+        summary.textContent = '';
+        chartWrap.style.display = 'none';
+        if (plot) { plot.destroy(); plot = null; }
+        for (const o of windowSel.options) { o.hidden = false; o.disabled = false; }
+        setError('');
+      });
+    })();
+  </script>
+  <p class="post-meta tool-back"><a href="/tools/">&larr; All tools</a></p>
+</BaseLayout>

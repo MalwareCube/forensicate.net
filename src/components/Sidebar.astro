@@ -1,0 +1,15 @@
+---
+import SidebarAbout from './SidebarAbout.astro';
+import SidebarRecentPosts from './SidebarRecentPosts.astro';
+import SidebarArchive from './SidebarArchive.astro';
+import SidebarTags from './SidebarTags.astro';
+import SidebarSubscribe from './SidebarSubscribe.astro';
+---
+<aside class="sidebar">
+  <SidebarAbout />
+  <SidebarRecentPosts />
+  <SidebarArchive />
+  <SidebarTags />
+  <SidebarSubscribe />
+  <slot name="append" />
+</aside>

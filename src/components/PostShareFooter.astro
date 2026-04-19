@@ -1,0 +1,86 @@
+---
+import { Icon } from 'astro-icon/components';
+import { tagPath } from '~/lib/posts';
+
+interface Props {
+  canonical: string;
+  title: string;
+  tags?: string[];
+}
+
+const { canonical, title, tags = [] } = Astro.props;
+const shareUrl = encodeURIComponent(canonical);
+const shareText = encodeURIComponent(title);
+const shareTextUrl = `${shareText}%20${shareUrl}`;
+const shareLinks = [
+  { name: 'X (Twitter)', icon: 'simple-icons:x', href: `https://twitter.com/intent/tweet?url=${shareUrl}&text=${shareText}` },
+  { name: 'Bluesky', icon: 'simple-icons:bluesky', href: `https://bsky.app/intent/compose?text=${shareTextUrl}` },
+  { name: 'Mastodon', icon: 'simple-icons:mastodon', href: `https://mastodonshare.com/?text=${shareText}&url=${shareUrl}` },
+  { name: 'LinkedIn', icon: 'simple-icons:linkedin', href: `https://www.linkedin.com/sharing/share-offsite/?url=${shareUrl}` },
+  { name: 'Reddit', icon: 'simple-icons:reddit', href: `https://www.reddit.com/submit?url=${shareUrl}&title=${shareText}` },
+];
+---
+<footer class="post-footer">
+  {tags.length > 0 && (
+    <div class="post-tags">
+      <span class="post-footer-label">Tags:</span>
+      {tags.map((t) => (
+        <a href={tagPath(t)} class="tag">{t}</a>
+      ))}
+    </div>
+  )}
+  <div class="post-share">
+    <span class="post-footer-label">Share:</span>
+    {shareLinks.map((s) => (
+      <a href={s.href} class="share-link" target="_blank" rel="noopener noreferrer" aria-label={`Share on ${s.name}`} title={`Share on ${s.name}`}>
+        <Icon name={s.icon} />
+      </a>
+    ))}
+    <button type="button" class="share-link copy-link" data-url={canonical} aria-label="Copy link" title="Copy link">
+      <Icon name="lucide:link" />
+    </button>
+  </div>
+</footer>
+
+<script>
+  const copyBtn = document.querySelector<HTMLButtonElement>('.copy-link');
+  if (copyBtn) {
+    copyBtn.addEventListener('click', async () => {
+      const url = copyBtn.dataset.url ?? window.location.href;
+      try {
+        await navigator.clipboard.writeText(url);
+        copyBtn.classList.add('copied');
+        copyBtn.setAttribute('title', 'Copied');
+      } catch {
+        copyBtn.classList.add('error');
+      }
+      setTimeout(() => {
+        copyBtn.classList.remove('copied', 'error');
+        copyBtn.setAttribute('title', 'Copy link');
+      }, 1400);
+    });
+  }
+
+  const blocks = document.querySelectorAll<HTMLPreElement>('.post-body pre');
+  blocks.forEach((pre) => {
+    if (pre.querySelector('.copy-btn')) return;
+    const btn = document.createElement('button');
+    btn.type = 'button';
+    btn.className = 'copy-btn';
+    btn.textContent = 'copy';
+    btn.setAttribute('aria-label', 'Copy code block to clipboard');
+    btn.addEventListener('click', async () => {
+      const code = pre.querySelector('code');
+      const text = code ? code.innerText : pre.innerText;
+      try {
+        await navigator.clipboard.writeText(text);
+        btn.textContent = 'copied';
+        setTimeout(() => { btn.textContent = 'copy'; }, 1200);
+      } catch {
+        btn.textContent = 'error';
+        setTimeout(() => { btn.textContent = 'copy'; }, 1200);
+      }
+    });
+    pre.appendChild(btn);
+  });
+</script>

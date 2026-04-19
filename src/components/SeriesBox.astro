@@ -1,0 +1,31 @@
+---
+import type { Post } from '~/lib/posts';
+import { postPath, seriesPosts, getAllPosts } from '~/lib/posts';
+
+interface Props { post: Post; }
+const { post } = Astro.props;
+const seriesName = post.data.series;
+
+let parts: Post[] = [];
+if (seriesName) {
+  const all = await getAllPosts();
+  parts = seriesPosts(seriesName, all);
+}
+---
+{seriesName && parts.length > 1 && (
+  <aside class="series-box" aria-label="Series navigation">
+    <div class="series-label">Part of a series</div>
+    <div class="series-name">{seriesName}</div>
+    <ol>
+      {parts.map((p) => (
+        <li class={p.id === post.id ? 'current' : ''}>
+          {p.id === post.id ? (
+            <>{p.data.title}</>
+          ) : (
+            <a href={postPath(p)}>{p.data.title}</a>
+          )}
+        </li>
+      ))}
+    </ol>
+  </aside>
+)}

@@ -1,0 +1,22 @@
+---
+import type { ImageMetadata } from 'astro';
+import { Image } from 'astro:assets';
+
+interface Props {
+  src: ImageMetadata | string;
+  alt?: string;
+  caption?: string;
+  className?: string;
+  loading?: 'lazy' | 'eager';
+}
+const { src, alt = '', caption, className, loading = 'lazy' } = Astro.props;
+const isProcessed = typeof src !== 'string';
+---
+<figure class={`post-figure${className ? ` ${className}` : ''}`}>
+  {isProcessed ? (
+    <Image src={src as ImageMetadata} alt={alt} loading={loading} />
+  ) : (
+    <img src={src as string} alt={alt} loading={loading} />
+  )}
+  {caption && <figcaption>{caption}</figcaption>}
+</figure>

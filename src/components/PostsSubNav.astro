@@ -1,0 +1,18 @@
+---
+import { postsSubNav } from '~/site.config';
+
+const pathname = Astro.url.pathname;
+function isCurrent(href: string): boolean {
+  if (href === '/posts/') return pathname === '/posts/' || /^\/posts\/\d+\/?$/.test(pathname);
+  return pathname === href || pathname.startsWith(href);
+}
+---
+<nav class="subnav" aria-label="Posts section">
+  <ul>
+    {postsSubNav.map((link) => (
+      <li>
+        <a href={link.href} aria-current={isCurrent(link.href) ? 'page' : undefined}>{link.label}</a>
+      </li>
+    ))}
+  </ul>
+</nav>

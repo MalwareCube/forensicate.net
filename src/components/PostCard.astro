@@ -1,0 +1,28 @@
+---
+import type { Post } from '~/lib/posts';
+import { postPath, formatDate, tagPath, excerpt, readingTimeMinutes } from '~/lib/posts';
+import { site } from '~/site.config';
+
+interface Props { post: Post; }
+const { post } = Astro.props;
+const href = postPath(post);
+const minutes = readingTimeMinutes(post);
+---
+<article class="post-card">
+  <h2><a href={href}>{post.data.title}</a></h2>
+  <p class="post-meta">
+    Posted {formatDate(post.data.pubDate)} by {site.author}
+    <span class="dot"> · </span>
+    <span class="reading-time">{minutes} min read</span>
+  </p>
+  <p class="excerpt">{excerpt(post)}</p>
+  <a class="read-more" href={href}>[ read more → ]</a>
+  {post.data.tags.length > 0 && (
+    <p class="post-card-tags">
+      <span class="post-card-tags-label">Tags:</span>
+      {post.data.tags.map((t) => (
+        <a href={tagPath(t)} class="tag">{t}</a>
+      ))}
+    </p>
+  )}
+</article>

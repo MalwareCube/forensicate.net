@@ -1,0 +1,121 @@
+---
+import { Image } from 'astro:assets';
+import BaseLayout from '~/layouts/BaseLayout.astro';
+import { socials } from '~/site.config';
+import andrewPortrait from '~/assets/andrew.jpg';
+---
+<BaseLayout title="About" description="About Andrew Prince and the forensicate.net blog.">
+  <h1>About</h1>
+
+  <div class="about-intro">
+    <Image
+      src={andrewPortrait}
+      alt="Andrew Prince"
+      width={160}
+      height={160}
+      class="about-portrait"
+    />
+    <div class="about-intro-text">
+      <p>
+        Hi, I'm <strong>Andrew Prince</strong>. I work in digital forensics, incident response,
+        and threat hunting. Day to day, I handle IR investigations, SIEM and log analysis, 
+        and writing automation to scale detection and response.
+      </p>
+      <p>
+        Outside of that, I enjoy spending time researching <a href="/tags/windows/">Windows forensic artifacts</a>,
+        <a href="/tags/malware/">malware</a> samples, and <a href="/tags/defense/">defensive tradecraft</a>
+        that holds up against how adversaries actually behave.
+      </p>
+    </div>
+  </div>
+
+  <p>
+    My career spans over a decade, starting in software development and moving through systems
+    administration before settling into DFIR. Alongside the practitioner work, I build <a href="/tools/">forensic tools</a>,
+    usually to scratch my own investigation itches. Some of it ends up on this site.
+  </p>
+
+  <p>
+    I also build <a href="https://tcm-sec.com/" target="_blank" rel="noopener noreferrer">cyber ranges and teach</a>.
+    Over the years <b>I've trained thousands of analysts worldwide</b>
+    and supported major MDR teams preparing their responders for real adversary operations.
+  </p>
+
+  <p>
+    I stood up this blog to share research, investigation notes, lessons learned,
+    and the occasional half-baked idea with the community.
+  </p>
+
+  <h2>Teaching schedule</h2>
+  <p>Course author and instructor at TCM Security:</p>
+  <ul class="course-list">
+    <li>
+      <a href="https://tcm-sec.com/academy/security-operations-soc-101/" target="_blank" rel="noopener noreferrer">SOC 101: Security Operations Fundamentals</a>
+      <p class="course-desc">
+        An intensive entry-level course preparing new analysts for T1/T2 SOC roles through hands-on
+        labs in phishing triage, SIEM and log analysis, endpoint and network monitoring,
+        threat intelligence, and incident response fundamentals.
+      </p>
+    </li>
+    <li>
+      <a href="https://tcm-sec.com/academy/security-operations-soc-201/" target="_blank" rel="noopener noreferrer">SOC 201: IR, Threat Hunting, and Forensics</a>
+      <p class="course-desc">
+        An intermediate course teaching incident responders, threat hunters, and forensic
+        examiners the skills needed to detect, investigate, and contain intrusions across
+        enterprise environments.
+      </p>
+    </li>
+    <li>
+      <a href="https://tcm-sec.com/academy/" target="_blank" rel="noopener noreferrer">Windows Forensic Analysis</a>
+      <p class="course-desc">
+        A course that builds deep practical knowledge of Microsoft Windows forensic
+        artifacts through evidence acquisition, artifact interpretation, user activity
+        reconstruction, and organization of findings.
+      </p>
+    </li>
+  </ul>
+
+  <blockquote class="testimonial">
+    <p>One of the best hands-on courses I have seen. It is now the standard for me to recommend to anyone looking to break into T1/T2. I've even put in a training request for some of my employees.</p>
+    <cite>Manager, Cybersecurity Operations, Arctic Wolf</cite>
+  </blockquote>
+
+  <blockquote class="testimonial">
+    <p>It's not often that a course leaves me this impressed. Security Operations (SOC) 101 by Andrew Prince is one of the most comprehensive courses I've taken in a long time, and that's saying a lot. It's hard to put into words just how complete this course is.</p>
+    <cite>Roger Bergling, INVID Gruppen</cite>
+  </blockquote>
+
+  <h2>Credentials</h2>
+  <h3>Education</h3>
+  <ul>
+    <li>SANS Technology Institute, Graduate Certificate in Incident Response</li>
+    <li>Western University, BA</li>
+    <li>Fanshawe College, Diploma</li>
+  </ul>
+  <h3>Certifications</h3>
+  <ul>
+    <li><b>GIAC</b> GCFE (Certified Forensic Examiner), GCFA (Certified Forensic Analyst)</li>
+    <li><b>OffSec</b> OSCP</li>
+    <li><b>CompTIA</b> CySA+, Security+, A+</li>
+    <li><b>Microsoft</b> AZ-500 (Azure Security Engineer Associate), AZ-900 (Azure Fundamentals)</li>
+    <li><b>CyberDefenders</b> CCD, <b>Security Blue</b> BTL1</li>
+    <li>Probably a few others that I'm forgetting...</li>
+  </ul>
+
+  <h2>Right now</h2>
+  <p>
+    See my <a href="/now/">/now page</a> for a running snapshot of what I'm working on, reading, and thinking about.
+  </p>
+
+  <h2>Connect with me</h2>
+  <p>Find me at any of these links, or drop a line by <a href="mailto:andrew@forensicate.net">email</a>.</p>
+  <ul>
+    {socials.map((s) => (
+      <li><a href={s.href} target="_blank" rel="noopener noreferrer">{s.label}</a></li>
+    ))}
+  </ul>
+
+  <p class="post-meta">
+    Anything you read here reflects my personal views, not those of any employer or client.
+  </p>
+</BaseLayout>

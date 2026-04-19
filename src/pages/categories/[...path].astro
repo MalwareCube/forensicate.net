@@ -1,0 +1,152 @@
+---
+import type { GetStaticPaths } from 'astro';
+import BaseLayout from '~/layouts/BaseLayout.astro';
+import PostCard from '~/components/PostCard.astro';
+import PostsSubNav from '~/components/PostsSubNav.astro';
+import {
+  getAllPosts,
+  categoryTree,
+  categoryPath,
+  findCategoryNode,
+  sortedChildren,
+  categoryDescendantPosts,
+  slugifyCategory,
+  type CategoryNode,
+  type Post,
+} from '~/lib/posts';
+import { site } from '~/site.config';
+
+export const getStaticPaths: GetStaticPaths = async () => {
+  const posts = await getAllPosts();
+  const root = categoryTree(posts);
+  const out: {
+    params: { path: string };
+    props: { pathParts: string[]; pageNum: number; totalPages: number; pagePosts: Post[]; allPosts: Post[]; directPosts: Post[] };
+  }[] = [];
+
+  const walk = (node: CategoryNode) => {
+    for (const child of node.children.values()) {
+      const direct = [...child.directPosts].sort((a, b) => b.data.pubDate.valueOf() - a.data.pubDate.valueOf());
+      const descendants = categoryDescendantPosts(child);
+      const all = [...direct, ...descendants.filter((p) => !direct.some((d) => d.id === p.id))];
+      const pageSize = site.postsPerPage;
+      const totalPages = Math.max(1, Math.ceil(all.length / pageSize));
+      for (let i = 0; i < totalPages; i++) {
+        const pageNum = i + 1;
+        const slug = child.path.map(encodeURIComponent).join('/');
+        const urlPath = pageNum === 1 ? slug : `${slug}/${pageNum}`;
+        out.push({
+          params: { path: urlPath },
+          props: {
+            pathParts: child.path,
+            pageNum,
+            totalPages,
+            pagePosts: all.slice(i * pageSize, (i + 1) * pageSize),
+            allPosts: all,
+            directPosts: direct,
+          },
+        });
+      }
+      walk(child);
+    }
+  };
+  walk(root);
+  return out;
+};
+
+interface Props {
+  pathParts: string[];
+  pageNum: number;
+  totalPages: number;
+  pagePosts: Post[];
+  allPosts: Post[];
+  directPosts: Post[];
+}
+const { pathParts, pageNum, totalPages, pagePosts, allPosts } = Astro.props;
+
+const posts = await getAllPosts();
+const root = categoryTree(posts);
+const node = findCategoryNode(root, pathParts);
+const subcats = node ? sortedChildren(node) : [];
+
+const crumbs: { label: string; href: string }[] = [];
+{
+  let cursor: CategoryNode | undefined = root;
+  for (let i = 0; i < pathParts.length; i++) {
+    cursor = cursor?.children.get(slugifyCategory(pathParts[i]));
+    const label = cursor?.name ?? pathParts[i];
+    crumbs.push({ label, href: categoryPath(pathParts.slice(0, i + 1)) });
+  }
+}
+
+const title = node?.name ?? pathParts[pathParts.length - 1];
+const basePath = categoryPath(pathParts);
+const prevUrl = pageNum === 2 ? basePath : pageNum > 2 ? `${basePath}${pageNum - 1}/` : null;
+const nextUrl = pageNum < totalPages ? `${basePath}${pageNum + 1}/` : null;
+
+function countSummary(n: CategoryNode): string {
+  const subs = n.children.size;
+  const direct = n.directPosts.length;
+  const parts: string[] = [];
+  if (subs > 0) parts.push(`${subs} ${subs === 1 ? 'category' : 'categories'}`);
+  if (direct > 0) parts.push(`${direct} ${direct === 1 ? 'post' : 'posts'}`);
+  return parts.join(', ') || '0 posts';
+}
+---
+<BaseLayout title={`Category: ${title}${pageNum === 1 ? '' : ` | page ${pageNum}`}`}>
+  <PostsSubNav />
+  <p class="post-meta category-crumbs">
+    <a href="/categories/">Categories</a>
+    {crumbs.map((c, i) => (
+      <>
+        <span class="dot"> / </span>
+        {i === crumbs.length - 1 ? <span>{c.label}</span> : <a href={c.href}>{c.label}</a>}
+      </>
+    ))}
+  </p>
+  <h1>Category: <code>{title}</code></h1>
+  <p class="post-meta">{allPosts.length} {allPosts.length === 1 ? 'post' : 'posts'}</p>
+
+  {pageNum === 1 && subcats.length > 0 && (
+    <section class="subcats">
+      <h2>Subcategories</h2>
+      <ul class="subcat-list">
+        {subcats.map((c) => (
+          <li>
+            <a href={categoryPath(c.path)}>{c.name}</a>
+            <span class="count"> ({countSummary(c)})</span>
+          </li>
+        ))}
+      </ul>
+    </section>
+  )}
+
+  {pagePosts.map((p) => <PostCard post={p} />)}
+
+  {totalPages > 1 && (
+    <div class="pagination">
+      <span>{prevUrl && <a href={prevUrl}>← newer</a>}</span>
+      <span class="page-info">page {pageNum} of {totalPages}</span>
+      <span>{nextUrl && <a href={nextUrl}>older →</a>}</span>
+    </div>
+  )}
+
+  {allPosts.length === 0 && subcats.length === 0 && (
+    <p class="post-meta">No posts in this category yet.</p>
+  )}
+</BaseLayout>
+
+<style>
+  .category-crumbs {
+    padding-bottom: 0.6em;
+    border-bottom: 1px solid var(--border-soft);
+    margin-bottom: 1em;
+  }
+  .category-crumbs a { color: var(--link); }
+  .category-crumbs .dot { color: var(--text-muted); }
+  .subcats { padding-bottom: 0.6em; border-bottom: 1px solid var(--border-soft); margin-bottom: 1em; }
+  .subcats h2 { border-bottom: 0; padding-bottom: 0; margin-top: 1em; }
+  .subcat-list { padding-left: 1.4em; margin: 0.4em 0 0; }
+  .subcat-list li { margin: 0.2em 0; }
+  .count { color: var(--text-muted); font-family: var(--sans); font-size: 0.88em; }
+</style>

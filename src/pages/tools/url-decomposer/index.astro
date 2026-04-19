@@ -1,0 +1,212 @@
+---
+import BaseLayout from '~/layouts/BaseLayout.astro';
+import './styles.css';
+---
+<BaseLayout
+  title="URL Decomposer"
+  description="Paste a URL and break it into scheme, userinfo, host, port, path, query parameters, and fragment. Each component is percent-decoded, query parameters are split into individual key/value pairs, and defanged forms are refanged automatically. Everything runs entirely in your browser, so nothing ever leaves your machine."
+>
+  <h1>URL Decomposer</h1>
+  <p>
+    Paste a URL (defanged or live) and break it into scheme, userinfo, host, port, path, query parameters, and fragment. Each component is percent-decoded, and query parameters are split into individual key/value pairs. Handy for phishing triage, reviewing tracking parameters, and reading proxy logs.
+  </p>
+  <p class="post-meta">Everything runs entirely in your browser, so nothing ever leaves your machine.</p>
+
+  <div class="decoder" id="urlx">
+    <label for="url-input">URL</label>
+    <textarea id="url-input" spellcheck="false" placeholder="hxxps://example[.]com/path?q=%65vil&amp;utm_source=x#frag"></textarea>
+
+    <div class="controls">
+      <button type="button" data-action="parse">Decompose →</button>
+      <button type="button" data-action="clear">Clear</button>
+    </div>
+
+    <p class="error" id="urlx-error" role="status" aria-live="polite"></p>
+
+    <div id="urlx-out"></div>
+  </div>
+
+
+  <script>
+    import { matchPopular } from './_popular';
+    import { apexDomain } from './_etlds';
+    (function () {
+      const root = document.getElementById('urlx');
+      if (!root) return;
+      const input = root.querySelector('#url-input');
+      const out = root.querySelector('#urlx-out');
+      const error = root.querySelector('#urlx-error');
+
+      function setError(m) { error.textContent = m || ''; }
+
+      function refang(s) {
+        return s
+          .replace(/\[:\/\/\]/g, '://')
+          .replace(/\[\/\/\]/g, '//')
+          .replace(/\[:\]/g, ':')
+          .replace(/\[\.\]/g, '.')
+          .replace(/\(\.\)/g, '.')
+          .replace(/\{\.\}/g, '.')
+          .replace(/\[dot\]/gi, '.')
+          .replace(/\bhxxp(s?)\b/gi, 'http$1');
+      }
+
+      function safeDecode(s) { try { return decodeURIComponent(s); } catch { return s; } }
+
+      function makeGroup(title) {
+        const section = document.createElement('section');
+        section.className = 'urlx-group';
+        const header = document.createElement('header');
+        header.className = 'urlx-group-header';
+        header.textContent = title;
+        section.appendChild(header);
+        const table = document.createElement('table');
+        table.className = 'urlx-table';
+        const tbody = document.createElement('tbody');
+        table.appendChild(tbody);
+        section.appendChild(table);
+        return { section, tbody };
+      }
+
+      function row(label, value, opts = {}) {
+        const tr = document.createElement('tr');
+        const th = document.createElement('th');
+        th.scope = 'row';
+        th.textContent = label;
+        const td = document.createElement('td');
+        if (value === '' || value == null) {
+          td.textContent = opts.emptyText ?? '(empty)';
+          td.classList.add('urlx-empty');
+        } else {
+          td.textContent = value;
+          if (opts.decoded) td.classList.add('urlx-decoded');
+        }
+        tr.appendChild(th);
+        tr.appendChild(td);
+        return tr;
+      }
+
+      function parse(raw) {
+        setError('');
+        out.textContent = '';
+        const trimmed = (raw ?? '').trim();
+        if (!trimmed) return;
+        const refanged = refang(trimmed);
+
+        let u;
+        try { u = new URL(refanged); }
+        catch { setError('Could not parse URL.'); return; }
+
+        if (refanged !== trimmed) {
+          const wrap = document.createElement('div');
+          wrap.className = 'urlx-refanged';
+          const label = document.createElement('span');
+          label.className = 'urlx-refanged-label';
+          label.textContent = 'Refanged';
+          const text = document.createElement('span');
+          text.className = 'urlx-refanged-text';
+          text.textContent = refanged;
+          const copy = document.createElement('button');
+          copy.type = 'button';
+          copy.className = 'urlx-refanged-copy';
+          copy.textContent = 'Copy';
+          copy.addEventListener('click', async () => {
+            try { await navigator.clipboard.writeText(refanged); }
+            catch { setError('Copy failed.'); }
+          });
+          wrap.appendChild(label);
+          wrap.appendChild(text);
+          wrap.appendChild(copy);
+          out.appendChild(wrap);
+        }
+
+        const components = makeGroup('Components');
+        components.tbody.appendChild(row('Scheme', u.protocol.replace(':', '')));
+        components.tbody.appendChild(row('Username', u.username));
+        components.tbody.appendChild(row('Password', u.password));
+        components.tbody.appendChild(row('Host', u.hostname));
+        components.tbody.appendChild(row('Port', u.port));
+        components.tbody.appendChild(row('Path', u.pathname));
+        const decodedPath = safeDecode(u.pathname);
+        if (decodedPath !== u.pathname) {
+          components.tbody.appendChild(row('Path (decoded)', decodedPath, { decoded: true }));
+        }
+        const rawQuery = u.search.replace(/^\?/, '');
+        components.tbody.appendChild(row('Query (raw)', rawQuery));
+        const rawFrag = u.hash.replace(/^#/, '');
+        components.tbody.appendChild(row('Fragment', rawFrag));
+        const decodedFrag = safeDecode(rawFrag);
+        if (rawFrag && decodedFrag !== rawFrag) {
+          components.tbody.appendChild(row('Fragment (decoded)', decodedFrag, { decoded: true }));
+        }
+        out.appendChild(components.section);
+
+        const params = Array.from(u.searchParams);
+        if (params.length > 0) {
+          const qp = makeGroup(`Query parameters (${params.length})`);
+          qp.section.querySelector('table').classList.add('urlx-table-literal');
+          for (const [k, v] of params) qp.tbody.appendChild(row(k, v));
+          out.appendChild(qp.section);
+        }
+
+        const host = u.hostname;
+        if (host) {
+          const hb = makeGroup('Host breakdown');
+          const stripped = host.replace(/^\[|\]$/g, '');
+          const isIPv4 = /^\d{1,3}(\.\d{1,3}){3}$/.test(stripped);
+          const isIPv6 = host.startsWith('[') && host.endsWith(']');
+          if (isIPv4) {
+            hb.tbody.appendChild(row('Type', 'IPv4 literal'));
+            hb.tbody.appendChild(row('Address', stripped));
+          } else if (isIPv6) {
+            hb.tbody.appendChild(row('Type', 'IPv6 literal'));
+            hb.tbody.appendChild(row('Address', stripped));
+          } else {
+            const parts = host.split('.');
+            hb.tbody.appendChild(row('Labels', parts.join(' . ')));
+            const apex = apexDomain(host);
+            const apexLabels = apex.split('.').length;
+            if (parts.length > apexLabels) {
+              hb.tbody.appendChild(row('Subdomain', parts.slice(0, parts.length - apexLabels).join('.')));
+            }
+            if (parts.length >= 2) {
+              hb.tbody.appendChild(row('Apex', apex));
+            }
+            hb.tbody.appendChild(row('TLD', parts[parts.length - 1]));
+          }
+          out.appendChild(hb.section);
+
+          const popular = !isIPv4 && !isIPv6 ? matchPopular(stripped) : null;
+          if (popular) {
+            const note = document.createElement('p');
+            note.className = 'urlx-popular';
+            const label = document.createElement('span');
+            label.className = 'urlx-popular-label';
+            label.textContent = 'Popular';
+            note.appendChild(label);
+            const body = document.createElement('span');
+            body.appendChild(document.createTextNode(`${popular} is in Cloudflare Radar's `));
+            const link = document.createElement('a');
+            link.href = 'https://radar.cloudflare.com/domains';
+            link.target = '_blank';
+            link.rel = 'noopener noreferrer';
+            link.textContent = 'top 1,000 most-visited domains';
+            body.appendChild(link);
+            body.appendChild(document.createTextNode('.'));
+            note.appendChild(body);
+            out.appendChild(note);
+          }
+        }
+      }
+
+      root.querySelectorAll('.controls button').forEach((btn) => {
+        btn.addEventListener('click', () => {
+          const action = btn.dataset.action;
+          if (action === 'parse') parse(input.value);
+          else if (action === 'clear') { input.value = ''; out.textContent = ''; setError(''); }
+        });
+      });
+    })();
+  </script>
+  <p class="post-meta tool-back"><a href="/tools/">&larr; All tools</a></p>
+</BaseLayout>

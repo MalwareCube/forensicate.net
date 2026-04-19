@@ -1,0 +1,12 @@
+---
+interface Props {
+  role: 'user' | 'assistant';
+}
+const { role } = Astro.props;
+---
+<div class="llm-turn" data-role={role} hidden>
+  <span class="llm-turn-label"></span>
+  <div class="llm-turn-content">
+    <slot />
+  </div>
+</div>

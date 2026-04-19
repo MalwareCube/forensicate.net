@@ -1,0 +1,63 @@
+---
+import BaseLayout from '~/layouts/BaseLayout.astro';
+import PostsSubNav from '~/components/PostsSubNav.astro';
+import {
+  getAllPosts,
+  archiveTree,
+  monthPath,
+  monthName,
+  postPath,
+  formatDate,
+} from '~/lib/posts';
+
+const tree = archiveTree(await getAllPosts());
+---
+<BaseLayout title="Archive" description="Full post archive on forensicate.net, grouped by year and month.">
+  <PostsSubNav />
+  <h1>Archive</h1>
+  {tree.length === 0 && <p>No posts yet.</p>}
+  <div class="archive-tree archive-page">
+    {tree.map((y) => (
+      <details open class="archive-year">
+        <summary>
+          <span class="year-label">{y.year}</span>
+          <span class="count">({y.count})</span>
+        </summary>
+        <div class="archive-months">
+          {y.months.map((m) => (
+            <details open class="archive-month">
+              <summary>
+                <a href={monthPath(m.year, m.month)} class="month-link">{monthName(m.month)}</a>
+                <span class="count"> ({m.count})</span>
+              </summary>
+              <ul class="archive-posts">
+                {m.posts.map((p) => (
+                  <li>
+                    <span class="date">{formatDate(p.data.pubDate)}</span>
+                    <a href={postPath(p)}>{p.data.title}</a>
+                  </li>
+                ))}
+              </ul>
+            </details>
+          ))}
+        </div>
+      </details>
+    ))}
+  </div>
+</BaseLayout>
+
+<style>
+  .archive-page { font-size: 1em; margin-top: 0.6em; }
+  .archive-page .archive-year > summary { font-size: 1.15em; padding: 0.25em 0; }
+  .archive-page .archive-month > summary { padding: 0.15em 0; font-size: 1em; }
+  .archive-page .archive-posts li {
+    font-size: 0.95em;
+    white-space: normal;
+  }
+  .archive-page .archive-posts li .date {
+    color: var(--text-muted);
+    font-family: var(--sans);
+    font-size: 0.85em;
+    margin-right: 0.5em;
+  }
+</style>

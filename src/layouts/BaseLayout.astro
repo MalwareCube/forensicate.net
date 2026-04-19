@@ -1,0 +1,107 @@
+---
+import '~/styles/global.css';
+import '~/styles/blog.css';
+import SiteHeader from '~/components/SiteHeader.astro';
+import SiteFooter from '~/components/SiteFooter.astro';
+import Sidebar from '~/components/Sidebar.astro';
+import { site } from '~/site.config';
+
+interface Props {
+  title?: string;
+  description?: string;
+  ogType?: 'website' | 'article';
+  ogImage?: string;
+  jsonLd?: unknown;
+  theatreAllowed?: boolean;
+  frontmatter?: { title?: string; description?: string };
+}
+
+const { ogType = 'website', ogImage, jsonLd, theatreAllowed = false, frontmatter } = Astro.props;
+const fm = frontmatter ?? {};
+const title = Astro.props.title ?? fm.title;
+const description = Astro.props.description ?? fm.description;
+const pageTitle = title ? `${title} | ${site.author}` : site.author;
+const pageDesc = description ?? site.description;
+const canonical = new URL(Astro.url.pathname, site.url).toString();
+---
+<!DOCTYPE html>
+<html lang={site.lang}>
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>{pageTitle}</title>
+    <meta name="description" content={pageDesc} />
+    <link rel="canonical" href={canonical} />
+    <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
+    <link rel="icon" type="image/png" sizes="32x32" href="/favicon-32.png" />
+    <link rel="icon" type="image/png" sizes="16x16" href="/favicon-16.png" />
+    <link rel="shortcut icon" href="/favicon.ico" />
+    <link rel="apple-touch-icon" sizes="180x180" href="/apple-touch-icon.png" />
+    <link rel="manifest" href="/site.webmanifest" />
+    <meta name="theme-color" content="#d95a1e" />
+    <link rel="alternate" type="application/rss+xml" title={`${site.title} RSS`} href="/rss.xml" />
+    <meta property="og:site_name" content={site.title} />
+    <meta property="og:title" content={title ?? site.title} />
+    <meta property="og:description" content={pageDesc} />
+    <meta property="og:type" content={ogType} />
+    <meta property="og:url" content={canonical} />
+    {ogImage && <meta property="og:image" content={ogImage} />}
+    <meta name="twitter:card" content={ogImage ? 'summary_large_image' : 'summary'} />
+    {ogImage && <meta name="twitter:image" content={ogImage} />}
+    <meta name="generator" content={Astro.generator} />
+    {jsonLd && <script type="application/ld+json" set:html={JSON.stringify(jsonLd)} />}
+  </head>
+  <body data-theatre-allowed={theatreAllowed ? '1' : undefined}>
+    <a class="skip-link" href="#main">Skip to main content</a>
+    <SiteHeader pathname={Astro.url.pathname} />
+    <div class="page">
+      <main class="main" id="main" tabindex="-1">
+        <slot />
+      </main>
+      <Sidebar>
+        <slot name="sidebarAppend" slot="append" />
+      </Sidebar>
+    </div>
+    <SiteFooter />
+    <button id="back-to-top" type="button" aria-label="Back to top" hidden>↑ top</button>
+    <script is:inline>
+      (function () {
+        const btn = document.getElementById('back-to-top');
+        if (!btn) return;
+        const threshold = 600;
+        function update() {
+          if (window.scrollY > threshold) btn.removeAttribute('hidden');
+          else btn.setAttribute('hidden', '');
+        }
+        window.addEventListener('scroll', update, { passive: true });
+        btn.addEventListener('click', () => window.scrollTo({ top: 0, behavior: 'smooth' }));
+        update();
+
+        function syncTheatreLabels() {
+          const on = document.body.classList.contains('theatre');
+          document.querySelectorAll('[data-theatre-toggle]').forEach((b) => {
+            b.textContent = on ? 'exit reader' : 'reader mode';
+          });
+        }
+        syncTheatreLabels();
+        document.querySelectorAll('[data-theatre-toggle]').forEach((b) => {
+          b.addEventListener('click', () => {
+            document.body.classList.toggle('theatre');
+            syncTheatreLabels();
+          });
+        });
+
+        if (document.body.dataset.theatreAllowed === '1') {
+          document.addEventListener('keydown', (e) => {
+            if (e.key !== 'r' || e.ctrlKey || e.metaKey || e.altKey) return;
+            const t = e.target;
+            if (t && (t.tagName === 'INPUT' || t.tagName === 'TEXTAREA' || t.isContentEditable)) return;
+            e.preventDefault();
+            document.body.classList.toggle('theatre');
+            syncTheatreLabels();
+          });
+        }
+      })();
+    </script>
+  </body>
+</html>

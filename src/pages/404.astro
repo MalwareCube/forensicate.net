@@ -1,0 +1,23 @@
+---
+import BaseLayout from '~/layouts/BaseLayout.astro';
+import { getAllPosts, postPath, formatDate } from '~/lib/posts';
+
+const recent = (await getAllPosts()).slice(0, 5);
+---
+<BaseLayout title="Not found">
+  <h1>404: not found</h1>
+  <p>The URL you tried doesn't exist on this site. Try the <a href="/">home page</a>, the <a href="/archive/">archive</a>, or <a href="/tags/">tags</a>.</p>
+  {recent.length > 0 && (
+    <section class="related" aria-label="Recent posts">
+      <h3>Recent posts</h3>
+      <ul>
+        {recent.map((p) => (
+          <li>
+            <span class="date">{formatDate(p.data.pubDate)}</span>
+            <a href={postPath(p)}>{p.data.title}</a>
+          </li>
+        ))}
+      </ul>
+    </section>
+  )}
+</BaseLayout>

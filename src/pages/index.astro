@@ -1,0 +1,20 @@
+---
+import BaseLayout from '~/layouts/BaseLayout.astro';
+import PostCard from '~/components/PostCard.astro';
+import { getAllPosts } from '~/lib/posts';
+import { site } from '~/site.config';
+
+const allPosts = await getAllPosts();
+const posts = allPosts.slice(0, site.postsPerPage);
+const hasMore = allPosts.length > site.postsPerPage;
+---
+<BaseLayout>
+  {posts.length === 0 && <p>No posts yet. Start writing in <code>src/content/posts</code>.</p>}
+  {posts.map((p) => <PostCard post={p} />)}
+  {hasMore && (
+    <div class="pagination">
+      <span></span>
+      <a href="/posts/2/">older posts →</a>
+    </div>
+  )}
+</BaseLayout>

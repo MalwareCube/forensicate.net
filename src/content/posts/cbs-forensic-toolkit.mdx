@@ -1,0 +1,39 @@
+---
+title: "CBS Forensic Toolkit"
+description: "Parser for the Windows 11 Start Menu's CBS subsystem. Extracts forensic artifacts from the MicrosoftWindows.Client.CBS package: Start Menu search history, cached Bing queries, and application launch counts."
+pubDate: 2026-04-10
+updatedDate: 2026-04-14
+---
+
+<GitHubCard repo="exfiltrace-labs/cbs_parser" />
+
+The Windows 11 Start Menu is not the simple program launcher it once was. It is a search-driven interface powered by a dedicated UWP package, `MicrosoftWindows.Client.CBS_cw5n1h2txyewy` (the "CBS package"), which maintains its own local data stores to serve search results, track user preferences, and cache web content. In doing so, it quietly produces a collection of forensic artifacts that existing tools do not parse.
+
+[CBS Forensic Toolkit](https://github.com/exfiltrace-labs/cbs_parser) extracts three such artifact sources from the CBS package, each with meaningful forensic value.
+
+## IndexedDB (LevelDB)
+
+A Chromium **IndexedDB** store that records Start Menu search interactions: what the user typed, what they launched or previewed, and when. Records include timestamps, cumulative launch counts, and the user's exact keystrokes (typos included).
+
+## WebView2 disk cache
+
+Cached **Bing search queries** triggered by typing into the Start Menu search box. The cached URLs carry rich query parameters revealing the user's search terms, the method of query formation (typed vs. suggestion), session identifiers, and geographic metadata, all produced without the user ever opening a browser.
+
+## AppsIndex.db (SQLite)
+
+A **SQLite database** of applications indexed by the Start Menu with cumulative launch counts that reflect execution from *any* source, not just the Start Menu itself. This provides a distinct vantage point compared to UserAssist, which tracks only Explorer shell-based launches.
+
+## Investigative Value
+
+On Windows 11, the long-standing `WordWheelQuery` registry artifact, which previously recorded user search terms in File Explorer and the Start Menu, is no longer populated. 
+
+The CBS package artifacts *partially* fill that gap, providing insight into user search behaviour that would otherwise be lost on modern Windows systems.
+
+Together, these artifacts can establish evidence of program execution, reveal user search intent, and corroborate or challenge findings from traditional artifacts such as UserAssist, Prefetch, and AmCache.
+
+There is still a lot of research to be done, along with additional testing, validation, and refinement, but early findings and this tool's early development are promising.
+
+## References
+
+- CBS Forensic Toolkit source:
+  [github.com/exfiltrace-labs/cbs_parser](https://github.com/exfiltrace-labs/cbs_parser)

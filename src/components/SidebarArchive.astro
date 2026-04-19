@@ -1,0 +1,41 @@
+---
+import { getAllPosts, archiveTree, monthPath, monthName, postPath, pad2 } from '~/lib/posts';
+
+const tree = archiveTree(await getAllPosts());
+const latestYear = tree[0]?.year;
+const latestMonthKey = tree[0]?.months[0]
+  ? `${tree[0].year}-${pad2(tree[0].months[0].month)}`
+  : null;
+---
+<section class="widget">
+  <h3><a href="/archive/">Archive</a></h3>
+  <div class="archive-tree">
+    {tree.map((y) => (
+      <details open={y.year === latestYear} class="archive-year">
+        <summary>
+          <span class="year-label">{y.year}</span>
+          <span class="count">({y.count})</span>
+        </summary>
+        <div class="archive-months">
+          {y.months.map((m) => {
+            const key = `${y.year}-${pad2(m.month)}`;
+            return (
+              <details open={key === latestMonthKey} class="archive-month">
+                <summary>
+                  <a href={monthPath(m.year, m.month)} class="month-link">{monthName(m.month)}</a>
+                  <span class="count"> ({m.count})</span>
+                </summary>
+                <ul class="archive-posts">
+                  {m.posts.map((p) => (
+                    <li><a href={postPath(p)} title={p.data.title}>{p.data.title}</a></li>
+                  ))}
+                </ul>
+              </details>
+            );
+          })}
+        </div>
+      </details>
+    ))}
+    {tree.length === 0 && <p class="muted">No archive yet.</p>}
+  </div>
+</section>

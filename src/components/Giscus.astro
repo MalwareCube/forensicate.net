@@ -1,0 +1,38 @@
+---
+import { giscus } from '~/site.config';
+---
+{giscus.enabled && (
+  <section class="comments" aria-label="Comments">
+    <h3 class="comments-heading">Comments</h3>
+    <script
+      src="https://giscus.app/client.js"
+      data-repo={giscus.repo}
+      data-repo-id={giscus.repoId}
+      data-category={giscus.category}
+      data-category-id={giscus.categoryId}
+      data-mapping="pathname"
+      data-strict="0"
+      data-reactions-enabled="1"
+      data-emit-metadata="0"
+      data-input-position="top"
+      data-theme="light"
+      data-lang="en"
+      data-loading="lazy"
+      crossorigin="anonymous"
+      async
+    ></script>
+  </section>
+)}
+
+<style>
+  .comments-heading {
+    font-family: var(--sans);
+    font-size: 0.9em;
+    text-transform: uppercase;
+    letter-spacing: 0.08em;
+    color: var(--text-muted);
+    border-bottom: 1px solid var(--border);
+    padding-bottom: 0.3em;
+    margin-top: 2em;
+  }
+</style>

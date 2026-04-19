@@ -1,0 +1,120 @@
+---
+import type { MarkdownHeading } from 'astro';
+
+interface Props { headings: MarkdownHeading[]; minCount?: number; }
+const { headings, minCount = 3 } = Astro.props;
+
+const items = headings
+  .filter((h) => h.depth >= 2 && h.depth <= 4)
+  .map((h) => ({ ...h, text: h.text.replace(/\s*#\s*$/, '') }));
+const show = items.length >= minCount;
+---
+{show && (() => {
+  type Node = { slug: string; text: string; depth: number; children: Node[] };
+  const tree: Node[] = [];
+  let currentH2: Node | null = null;
+  let currentH3: Node | null = null;
+  for (const h of items) {
+    const node: Node = { slug: h.slug, text: h.text, depth: h.depth, children: [] };
+    if (h.depth === 2) {
+      tree.push(node);
+      currentH2 = node;
+      currentH3 = null;
+    } else if (h.depth === 3) {
+      if (currentH2) currentH2.children.push(node);
+      else tree.push(node);
+      currentH3 = node;
+    } else {
+      if (currentH3) currentH3.children.push(node);
+      else if (currentH2) currentH2.children.push(node);
+      else tree.push(node);
+    }
+  }
+  return (
+    <details class="toc">
+      <summary>Table of Contents</summary>
+      <ol class="toc-list">
+        {tree.map((n) => (
+          <li>
+            <a href={`#${n.slug}`}>{n.text}</a>
+            {n.children.length > 0 && (
+              <ol class="toc-sublist">
+                {n.children.map((c) => (
+                  <li>
+                    <a href={`#${c.slug}`}>{c.text}</a>
+                    {c.children.length > 0 && (
+                      <ol class="toc-subsublist">
+                        {c.children.map((g) => (
+                          <li><a href={`#${g.slug}`}>{g.text}</a></li>
+                        ))}
+                      </ol>
+                    )}
+                  </li>
+                ))}
+              </ol>
+            )}
+          </li>
+        ))}
+      </ol>
+    </details>
+  );
+})()}
+
+<style>
+  .toc {
+    border: 1px solid var(--border);
+    background: #fafafa;
+    padding: 0.5em 0.9em;
+    margin: 1em 0 1.4em;
+    font-size: 0.92em;
+  }
+  .toc summary {
+    cursor: pointer;
+    font-family: var(--sans);
+    font-size: 0.78em;
+    text-transform: uppercase;
+    letter-spacing: 0.08em;
+    color: var(--text-muted);
+    font-weight: bold;
+    list-style: none;
+    user-select: none;
+  }
+  .toc summary::-webkit-details-marker { display: none; }
+  .toc summary::before {
+    content: '▾ ';
+    color: var(--text-muted);
+    font-size: 0.85em;
+  }
+  .toc:not([open]) summary::before { content: '▸ '; }
+  .toc-list {
+    list-style: decimal;
+    padding: 0.5em 0 0 1.7em;
+    margin: 0;
+    color: var(--text-muted);
+  }
+  .toc-list > li {
+    margin: 0.25em 0;
+    line-height: 1.4;
+    padding-left: 0.15em;
+  }
+  .toc-sublist {
+    list-style: lower-alpha;
+    padding: 0.15em 0 0.15em 1.4em;
+    margin: 0.15em 0 0.3em;
+  }
+  .toc-sublist > li {
+    margin: 0.1em 0;
+    font-size: 0.95em;
+  }
+  .toc-subsublist {
+    list-style: lower-roman;
+    padding: 0.1em 0 0.1em 1.4em;
+    margin: 0.1em 0 0.2em;
+  }
+  .toc-subsublist > li {
+    margin: 0.1em 0;
+    font-size: 0.92em;
+  }
+  .toc a { text-decoration: none; color: var(--link); }
+  .toc a:hover { text-decoration: underline; color: var(--link-hover); }
+</style>

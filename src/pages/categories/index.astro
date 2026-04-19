@@ -1,0 +1,94 @@
+---
+import BaseLayout from '~/layouts/BaseLayout.astro';
+import PostsSubNav from '~/components/PostsSubNav.astro';
+import { getAllPosts, categoryTree, categoryPath, sortedChildren, type CategoryNode } from '~/lib/posts';
+
+const posts = await getAllPosts();
+const root = categoryTree(posts);
+const topLevel = sortedChildren(root);
+
+function countSummary(node: CategoryNode): string {
+  const subs = node.children.size;
+  const direct = node.directPosts.length;
+  const parts: string[] = [];
+  if (subs > 0) parts.push(`${subs} ${subs === 1 ? 'category' : 'categories'}`);
+  if (direct > 0) parts.push(`${direct} ${direct === 1 ? 'post' : 'posts'}`);
+  return parts.join(', ') || '0 posts';
+}
+---
+<BaseLayout title="Categories" description="Posts organized by category.">
+  <PostsSubNav />
+  <h1>Categories</h1>
+
+  {topLevel.length === 0 ? (
+    <p>No categorized posts yet.</p>
+  ) : (
+    <div class="archive-tree category-page">
+      {topLevel.map((node) => (
+        node.children.size > 0 ? (
+          <details open class="archive-year">
+            <summary>
+              <a href={categoryPath(node.path)} class="cat-link">{node.name}</a>
+              <span class="count"> ({countSummary(node)})</span>
+            </summary>
+            <div class="archive-months">
+              {sortedChildren(node).map((child) => (
+                child.children.size > 0 ? (
+                  <details open class="archive-month">
+                    <summary>
+                      <a href={categoryPath(child.path)} class="month-link">{child.name}</a>
+                      <span class="count"> ({countSummary(child)})</span>
+                    </summary>
+                    <ul class="archive-posts">
+                      {sortedChildren(child).map((g) => (
+                        <li>
+                          <a href={categoryPath(g.path)}>{g.name}</a>
+                          <span class="count"> ({countSummary(g)})</span>
+                        </li>
+                      ))}
+                    </ul>
+                  </details>
+                ) : (
+                  <ul class="archive-posts leaf-only">
+                    <li>
+                      <a href={categoryPath(child.path)}>{child.name}</a>
+                      <span class="count"> ({countSummary(child)})</span>
+                    </li>
+                  </ul>
+                )
+              ))}
+            </div>
+          </details>
+        ) : (
+          <div class="category-flat">
+            <a href={categoryPath(node.path)} class="cat-link">{node.name}</a>
+            <span class="count"> ({countSummary(node)})</span>
+          </div>
+        )
+      ))}
+    </div>
+  )}
+</BaseLayout>
+
+<style>
+  .category-page { margin-top: 0.6em; }
+  .category-page .archive-year > summary .cat-link { color: var(--text); text-decoration: none; }
+  .category-page .archive-year > summary:hover .cat-link { color: var(--link); text-decoration: underline; }
+  .category-page .archive-year > summary { font-size: 1.05em; }
+  .category-flat {
+    font-family: var(--sans);
+    font-size: 1.05em;
+    font-weight: bold;
+    padding: 0.1em 0;
+  }
+  .category-flat::before {
+    content: '·';
+    display: inline-block;
+    width: 0.9em;
+    color: var(--text-muted);
+    font-size: 0.72em;
+  }
+  .category-flat .cat-link { color: var(--text); text-decoration: none; }
+  .category-flat:hover .cat-link { color: var(--link); text-decoration: underline; }
+  .category-page .leaf-only { margin-top: 0.15em; }
+</style>

@@ -1,0 +1,527 @@
+---
+title: "PowerShell Incident Response Cheatsheet"
+description: "Quick-reference PowerShell commands for triage and evidence collection during live-response investigations."
+pubDate: 2025-07-31
+updatedDate: 2026-04-17
+tags: ["powershell", "incident-response", "cheatsheet"]
+categories: ["Cheatsheets"]
+---
+
+When every second counts, efficient evidence collection makes all the difference. This quick
+reference is designed to help analysts rapidly collect and triage key artifacts during a live
+response investigation.
+
+<Callout type="note">
+  This is a living cheatsheet. The "Last updated" date at the top of this post reflects the latest revision.
+</Callout>
+
+## Core cmdlets
+
+A cmdlet is a lightweight, single-function command built into PowerShell. Cmdlets are designed
+to perform specific tasks, like retrieving system information or managing processes. They are
+the building blocks for gathering and analyzing data efficiently during investigations.
+
+| Command | Alias | Description |
+| --- | --- | --- |
+| `Get-Item` | `gi` | Retrieves metadata about a single file or registry key. |
+| `Get-ChildItem` | `dir`, `gci`, `ls` | Lists files and directories (used for browsing file system paths and artifacts). |
+| `Get-ItemProperty` | `gp` | Retrieves file or registry key properties (LastAccessTime, registry value name/data, etc.). |
+| `Get-Content` | `cat`, `gc`, `type` | Reads contents of text-based log files, scripts, and configuration files. |
+| `Select-String` | `sls` | Searches file contents or command output for keywords. |
+| `Get-WmiObject` (deprecated) | `gwmi` | Queries WMI providers for system information (legacy use). |
+| `Get-CimInstance` | `gcim` | Queries CIM/WMI providers for system info (modern replacement for `Get-WmiObject`). |
+| `Get-Process` | `gps`, `ps` | Lists all running processes with names, PIDs, and resource usage. |
+| `Get-Service` | `gsv` | Lists services and their states (running, stopped, startup type, etc.). |
+| `Get-ScheduledTask` | (none) | Lists scheduled tasks and their execution details. |
+| `Get-WinEvent` | (none) | Retrieves event logs (System, Security, Application, etc.) with a number of filtering options. |
+| `Get-NetTCPConnection` | (none) | Lists active TCP connections and listening ports, including owning process IDs. |
+| `Get-NetAdapter` | (none) | Displays network interface details and configuration. |
+| `Get-NetIPAddress` | (none) | Displays IPv4/IPv6 address configuration and the interfaces those addresses are bound to. |
+| `Get-SmbShare` | (none) | Lists SMB file shares hosted on the system, including their paths. |
+| `Get-DnsClientCache` | (none) | Shows cached DNS query results on the local machine. |
+| `Get-LocalUser` | `glu` | Lists local user accounts on the system. |
+| `Get-LocalGroupMember` | `glgm` | Shows members of local groups (e.g., Administrators). |
+| `Get-HotFix` | (none) | Lists installed updates and patches on the system. |
+| `Get-PnpDevice` | (none) | Enumerates plug-and-play devices, including USB hardware history. |
+| `Get-MpPreference` | (none) | Retrieves Windows Defender preferences, exclusions, and scan settings. |
+| `Get-Acl` | (none) | Displays file or registry permissions. |
+| `Get-Date` | (none) | Displays current system time. |
+| `Get-FileHash` | (none) | Generates file hashes (MD5/SHA1/SHA256) for integrity checks or IOC matching. |
+| `Write-Host` | (none) | Displays messages directly to the console. Commonly used for interactive output within scripts. |
+
+## Formatting and output cmdlets
+
+During investigations, we often need to sort, filter, and transform that information to surface
+patterns and find meaning. PowerShell's formatting cmdlets let you quickly transform raw output
+into something clear and actionable.
+
+| Command | Alias | Description |
+| --- | --- | --- |
+| `Format-Table` | `ft` | Displays output in a table format with columns. |
+| `Format-List` | `fl` | Displays properties in a list format. |
+| `Format-Wide` | `fw` | Shows only a single property per object, displayed in multiple columns across the console width. |
+| `Select-Object` | `select` | Chooses specific properties from objects and can select the first or last N results. |
+| `Sort-Object` | `sort` | Sorts objects in ascending or descending order based on one or more properties. |
+| `Group-Object` | `group` | Groups objects that share a common property and displays a count of each group. |
+| `Measure-Object` | `measure` | Calculates statistics (*count, sum, average, min, max*) for numeric or string properties of objects. |
+| `Out-String` | (none) | Converts objects into a string representation. |
+| `Out-File` | (none) | Sends formatted output to a text file instead of the console. |
+| `ConvertTo-Json` | (none) | Converts PowerShell objects into JSON format. |
+| `ConvertTo-Csv` | (none) | Converts objects into comma-separated values. |
+| `Export-Csv` | `epcsv` | Writes object data to a CSV file. |
+
+## Collection examples
+
+Below is a **non-exhaustive** set of commands to gather key system information during your
+investigation. Use these as building blocks to tailor your data collection. In PowerShell, there
+are often multiple ways to retrieve the same information. It is generally recommended to use
+more than one method to validate findings and reduce the risk of missing or tampered data.
+
+### Remote collection
+
+PowerShell allows you to scale your data collection efforts across multiple machines by
+specifying remote targets. The `-ComputerName` parameter accepts an FQDN, a NetBIOS name, or an
+IP address:
+
+```powershell
+Get-CimInstance -ClassName Win32_OperatingSystem -ComputerName WKS-4F1D, WKS-8N3K
+```
+
+By default, `Get-CimInstance -ComputerName` talks to targets over WSMan (PowerShell Remoting),
+so remote hosts must have WinRM enabled and reachable. If you need DCOM (the legacy WMI
+transport) instead, create a session explicitly:
+
+```powershell
+$session = New-CimSession -ComputerName WKS-4F1D -SessionOption (New-CimSessionOption -Protocol DCOM)
+Get-CimInstance -ClassName Win32_OperatingSystem -CimSession $session
+```
+
+### Machine and OS information
+
+Full OS details including version, build, serial number, and install date:
+
+```powershell
+Get-CimInstance -ClassName Win32_OperatingSystem | Select-Object * | Format-List
+```
+
+Last boot time, showing when the machine was most recently started or restarted:
+
+```powershell
+Get-CimInstance Win32_OperatingSystem | Select-Object LastBootUpTime
+```
+
+### Local user accounts and logon artifacts
+
+All local user accounts configured on the machine, including disabled or hidden accounts:
+
+```powershell
+Get-LocalUser
+```
+
+Currently active logon sessions and the users associated with them:
+
+```powershell
+Get-CimInstance -ClassName Win32_LoggedOnUser
+```
+
+Computer hostname and the username of the currently logged-in user:
+
+```powershell
+Get-CimInstance -ClassName Win32_ComputerSystem | Select-Object Name, UserName
+```
+
+### Running process artifacts
+
+All running processes with process name, PID, and resource usage:
+
+```powershell
+Get-Process
+```
+
+A process (or processes) by name (e.g., svchost). The `-Name` parameter also supports
+wildcards (`*`):
+
+```powershell
+Get-Process -Name svchost
+```
+
+A process by its process ID (e.g., 14012) along with its full executable path:
+
+```powershell
+Get-Process -Id 14012 | Select-Object Name, Path
+```
+
+All DLL modules loaded by the specified process (e.g., audiodg), including name, full path,
+and size:
+
+```powershell
+Get-Process -Name audiodg -Module
+```
+
+Top 5 most resource-intensive processes, sorted by CPU usage:
+
+```powershell
+Get-Process | Sort-Object CPU -Descending | Select-Object -First 5 Name, Id, CPU
+```
+
+SHA256 file hashes for all running processes that have an executable path:
+
+```powershell
+Get-Process | Where-Object { $_.Path } | ForEach-Object { Get-FileHash $_.Path }
+```
+
+Append `-Algorithm MD5` or `-Algorithm SHA1` to `Get-FileHash` to use a different algorithm.
+
+Running processes with their IDs, parent process IDs, executable paths, and full command lines:
+
+```powershell
+Get-CimInstance -ClassName Win32_Process | Select-Object Name, ProcessId, ParentProcessId, ExecutablePath, CommandLine
+```
+
+Running processes filtered via CIM to a specific name (e.g., chrome.exe):
+
+```powershell
+Get-CimInstance -ClassName Win32_Process -Filter "Name = 'chrome.exe'"
+```
+
+### Network artifacts
+
+All TCP connections currently in an established state:
+
+```powershell
+Get-NetTCPConnection -State Established
+```
+
+Active UDP listening endpoints with local IP, port, and owning process ID (PID):
+
+```powershell
+Get-NetUDPEndpoint | Select-Object LocalAddress, LocalPort, OwningProcess
+```
+
+Current IP configuration, IP address assignments, network adapter details, and routing table,
+respectively:
+
+```powershell
+Get-NetIPConfiguration; Get-NetIPAddress; Get-NetAdapter; Get-NetRoute
+```
+
+DNS resolver cache entries from the local machine:
+
+```powershell
+Get-DnsClientCache
+```
+
+All configured Windows Firewall rules (useful for spotting active policies and recent changes):
+
+```powershell
+Get-NetFirewallRule
+```
+
+### Share and drive artifacts
+
+SMB shares hosted by the local system, exported as CSV:
+
+```powershell
+Get-SmbShare | ConvertTo-Csv -NoTypeInformation
+```
+
+Active SMB client connections, including remote servers and share names the local system is
+connected to:
+
+```powershell
+Get-SmbConnection
+```
+
+All file system drives, including mapped network drives and local volumes:
+
+```powershell
+Get-PSDrive -PSProvider FileSystem
+```
+
+USB hubs present on the system:
+
+```powershell
+Get-CimInstance Win32_USBHub
+```
+
+For individual attached USB devices (mass storage, HID, etc.), prefer
+`Get-PnpDevice -Class USB` or `Get-CimInstance Win32_USBControllerDevice`.
+
+Top-level registry subkeys that track USB storage devices previously connected to the system
+(each subkey represents a device class such as vendor, product, or revision):
+
+```powershell
+Get-ChildItem -Path "HKLM:\SYSTEM\CurrentControlSet\Enum\USBSTOR"
+```
+
+One level deeper: each unique device instance under USBSTOR with its `FriendlyName`,
+serial-like `PSChildName`, and driver service:
+
+```powershell
+Get-ChildItem -Path "HKLM:\SYSTEM\CurrentControlSet\Enum\USBSTOR" |
+    ForEach-Object { Get-ChildItem -Path $_.PSPath } |
+    Get-ItemProperty |
+    Select-Object PSChildName, FriendlyName, Service
+```
+
+<Callout type="note">
+  The `Properties` subkeys under each USBSTOR device instance carry a SYSTEM-only ACL. To
+  reach those values, run as SYSTEM or parse the hive offline with a tool
+  such as RegRipper.
+</Callout>
+
+### Autorun artifacts
+
+Programs set to start automatically at boot for all users (machine-wide):
+
+```powershell
+Get-ItemProperty -Path "HKLM:\Software\Microsoft\Windows\CurrentVersion\Run"
+```
+
+Programs set to start automatically at logon for the current user:
+
+```powershell
+Get-ItemProperty -Path "HKCU:\Software\Microsoft\Windows\CurrentVersion\Run"
+```
+
+Programs scheduled to run once at next boot for all users:
+
+```powershell
+Get-ItemProperty -Path "HKLM:\Software\Microsoft\Windows\CurrentVersion\RunOnce"
+```
+
+Programs scheduled to run once at next logon for the current user:
+
+```powershell
+Get-ItemProperty -Path "HKCU:\Software\Microsoft\Windows\CurrentVersion\RunOnce"
+```
+
+<Callout type="note">
+  `Get-ItemProperty` returns `PSPath`, `PSParentPath`, `PSChildName`, `PSDrive`, and
+  `PSProvider` alongside the actual registry values. Pipe to
+  `Select-Object -Property * -ExcludeProperty PS*` if that noise gets in the way.
+</Callout>
+
+On 64-bit hosts, 32-bit applications write to a separate hive under `Wow6432Node`:
+
+```powershell
+Get-ItemProperty -Path "HKLM:\Software\Wow6432Node\Microsoft\Windows\CurrentVersion\Run"
+```
+
+```powershell
+Get-ItemProperty -Path "HKLM:\Software\Wow6432Node\Microsoft\Windows\CurrentVersion\RunOnce"
+```
+
+`RunOnceEx` is an extended variant that supports dependencies and ordered execution:
+
+```powershell
+Get-ChildItem -Path "HKLM:\Software\Microsoft\Windows\CurrentVersion\RunOnceEx" -Recurse
+```
+
+<Callout type="note">
+  Run and RunOnce keys are among the most commonly abused persistence locations. See T1547.001
+  for a larger list of variants that adversaries target.
+</Callout>
+
+### Service artifacts
+
+All services with name, display name, current status (running, stopped), and how they start:
+
+```powershell
+Get-Service | Select-Object Name, DisplayName, Status, StartType
+```
+
+Only the services that are actively running:
+
+```powershell
+Get-Service | Where-Object { $_.Status -eq 'Running' }
+```
+
+Services configured to start automatically when the system boots:
+
+```powershell
+Get-Service | Where-Object StartType -eq 'Automatic'
+```
+
+Detailed service information via CIM/WMI, including executable path and start mode:
+
+```powershell
+Get-CimInstance -ClassName Win32_Service | Select-Object Name, DisplayName, State, StartMode, PathName
+```
+
+### Scheduled task artifacts
+
+All scheduled tasks with names, folder paths, and current state (ready, running, disabled):
+
+```powershell
+Get-ScheduledTask | Select-Object TaskName, TaskPath, State
+```
+
+All enabled scheduled tasks, then detailed runtime information for each:
+
+```powershell
+Get-ScheduledTask | Where-Object {$_.State -ne "Disabled"} | Get-ScheduledTaskInfo
+```
+
+Non-disabled scheduled tasks that have either never run or have run within the last seven days,
+in CSV format:
+
+```powershell
+Get-ScheduledTask |
+    Where-Object { $_.State -ne 'Disabled' } |
+    ForEach-Object {
+        $info = $_ | Get-ScheduledTaskInfo
+        [pscustomobject]@{
+            TaskName    = $_.TaskName
+            TaskPath    = $_.TaskPath
+            State       = $_.State
+            LastRunTime = $info.LastRunTime
+            NextRunTime = $info.NextRunTime
+        }
+    } |
+    Where-Object { ($null -eq $_.LastRunTime) -or ($_.LastRunTime -gt (Get-Date).AddDays(-7)) } |
+    ConvertTo-Csv -NoTypeInformation
+```
+
+<Callout type="note">
+  `Get-ScheduledTask` objects do not expose `LastRunTime` directly; it lives on the object
+  returned by `Get-ScheduledTaskInfo`. Both are combined via `ForEach-Object` before the
+  time-window filter is applied.
+</Callout>
+
+### Event log artifacts
+
+Listing of all event logs available on the system:
+
+```powershell
+Get-WinEvent -ListLog *
+```
+
+Security log events for ID 4625 (failed user logon attempts). Swap `LogName` or `ID` to target
+other logs or event IDs:
+
+```powershell
+Get-WinEvent -FilterHashtable @{LogName="Security"; ID=4625}
+```
+
+Security log events for key user and group management activities plus audit log clearing:
+
+```powershell
+Get-WinEvent -FilterHashtable @{LogName="Security"; ID=4720,4722,4724,4738,4732,1102}
+```
+
+### File system and software artifacts
+
+Recursively search the `C:\` drive for files named `calc.exe` and output their full paths:
+
+```powershell
+Get-ChildItem C:\ -Recurse -Filter calc.exe -ErrorAction SilentlyContinue | Select-Object -ExpandProperty FullName
+```
+
+Recent shortcut (LNK) files indicating accessed documents or executables:
+
+```powershell
+Get-ChildItem "$env:APPDATA\Microsoft\Windows\Recent"
+```
+
+Prefetch files, a history of recently executed applications:
+
+```powershell
+Get-ChildItem C:\Windows\Prefetch
+```
+
+User-typed URLs stored in the Internet Explorer registry:
+
+```powershell
+Get-ItemProperty -Path "HKCU:\Software\Microsoft\Internet Explorer\TypedURLs"
+```
+
+Browser history database files for Edge, Chrome, and Firefox generally require parsing outside
+PowerShell, such as:
+
+- `C:\Users\$Username\AppData\Roaming\Mozilla\Firefox\Profiles\`
+- `C:\Users\$Username\AppData\Local\*\*\User Data\*\`
+
+Installed software as reported by the Windows Installer database:
+
+```powershell
+Get-CimInstance Win32_Product | Select-Object Name, Version, InstallDate
+```
+
+<Callout type="warning">
+  Avoid `Win32_Product` on live systems where practical. Every query triggers a consistency
+  check and reconfiguration of every MSI-installed package, which can modify system state and
+  generate noisy `MsiInstaller` event log entries. Prefer the registry-based alternatives below.
+</Callout>
+
+Installed software from the uninstall registry keys (machine-wide 64-bit, machine-wide 32-bit,
+and current user):
+
+```powershell
+# List installed software from the 64-bit uninstall registry key
+Get-ItemProperty -Path "HKLM:\Software\Microsoft\Windows\CurrentVersion\Uninstall\*" | Select-Object DisplayName, DisplayVersion, InstallDate
+
+# List installed software from the 32-bit uninstall registry key
+Get-ItemProperty -Path "HKLM:\Software\Wow6432Node\Microsoft\Windows\CurrentVersion\Uninstall\*" | Select-Object DisplayName, DisplayVersion, InstallDate
+
+# List installed software for the current user
+Get-ItemProperty -Path "HKCU:\Software\Microsoft\Windows\CurrentVersion\Uninstall\*" | Select-Object DisplayName, DisplayVersion, InstallDate
+```
+
+Volume Shadow Copies (snapshots) on the system:
+
+```powershell
+Get-CimInstance Win32_ShadowCopy
+```
+
+### Microsoft Defender exclusions
+
+All Defender antivirus exclusion settings (paths, extensions, IPs, and processes):
+
+```powershell
+Get-MpPreference | Select-Object -Property ExclusionPath, ExclusionExtension, ExclusionIpAddress, ExclusionProcess
+```
+
+### Installed and loaded drivers
+
+All system drivers with service name, current state, and the full path to the driver
+executable:
+
+```powershell
+Get-CimInstance Win32_SystemDriver | Select-Object Name, State, PathName
+```
+
+## PowerShell incident response frameworks
+
+Every incident can unfold differently, making it hard to form a single, all-encompassing
+playbook. Fortunately, many talented researchers have developed PowerShell-based IR and
+forensic frameworks to speed up evidence collection and triage, while maintaining flexibility.
+These frameworks provide prebuilt modules and scripts you can adapt to your investigation. Some
+popular examples include:
+
+- [Kansa](https://github.com/davehull/Kansa): A modular incident response framework for
+  large-scale data collection.
+- [Invoke-IR (PowerForensics)](https://github.com/Invoke-IR/PowerForensics): An all-inclusive
+  framework for hard drive forensic analysis.
+- [PowerShell Rapid Response](https://github.com/WiredPulse/PoSh-R2): A set of WMI scripts for
+  investigators and forensic analysts.
+- [PSRecon](https://github.com/gfoss/PSRecon): Automates live host triage and outputs results
+  in a report format.
+
+## References
+
+- MITRE ATT&CK:
+  [attack.mitre.org](https://attack.mitre.org/)
+- Nair, S. (2017). *Live Response with PowerShell*. GIAC GCFA Gold Certification Paper.
+  [giac.org/paper/gcfa/3393](https://www.giac.org/paper/gcfa/3393/live-response-powershell/108766)
+- The PowerShell Podcast. (2023, January 30). *Using PowerShell for incident response*
+  (Episode 21) [Video].
+  [youtube.com/watch?v=nUHBkf0bLrI](https://www.youtube.com/watch?v=nUHBkf0bLrI)
+- Hull, D. (2014). *Kansa: A modular PowerShell-based Incident Response framework*.
+  [github.com/davehull/Kansa](https://github.com/davehull/Kansa)
+- Atkinson, J. (2016). *PowerForensics: A PowerShell digital forensics framework*.
+  [github.com/Invoke-IR/PowerForensics](https://github.com/Invoke-IR/PowerForensics)
+- Tomlinson, F. (2016). *PowerShell Rapid Response*.
+  [github.com/WiredPulse/PoSh-R2](https://github.com/WiredPulse/PoSh-R2)
+- Foss, G. (2015). *PSRecon: Automated data collection for live incident response*.
+  [github.com/gfoss/PSRecon](https://github.com/gfoss/PSRecon)

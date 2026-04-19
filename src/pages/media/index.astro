@@ -1,0 +1,120 @@
+---
+import BaseLayout from '~/layouts/BaseLayout.astro';
+import { media, watchlist, page, categoryEmoji, type MediaEntry } from '~/media.config';
+import { formatDate } from '~/lib/posts';
+import { parseEmbed } from '~/lib/embed';
+import { fetchPlaylistVideos } from '~/lib/youtube';
+
+function isExternal(url: string): boolean {
+  return /^https?:\/\//i.test(url);
+}
+
+function keyDate(e: MediaEntry): number {
+  return e.date ? new Date(e.date).getTime() : 0;
+}
+
+const grouped: { category: string; items: MediaEntry[] }[] = [];
+for (const m of media) {
+  let bucket = grouped.find((g) => g.category === m.category);
+  if (!bucket) { bucket = { category: m.category, items: [] }; grouped.push(bucket); }
+  bucket.items.push(m);
+}
+for (const g of grouped) g.items.sort((a, b) => keyDate(b) - keyDate(a));
+
+const ytVideos = await fetchPlaylistVideos(watchlist.playlistId, watchlist.limit);
+---
+<BaseLayout title={page.title} description={page.description}>
+  <h1>{page.title}</h1>
+  <p>{page.intro}</p>
+
+  {grouped.length === 0 && ytVideos.length === 0 && <p>{page.empty}</p>}
+
+  {grouped.map((g) => (
+    <section class="media-group">
+      <h2>{categoryEmoji[g.category] ? `${categoryEmoji[g.category]} ` : ''}{g.category}</h2>
+      <ul class="media-list">
+        {g.items.map((m) => {
+          const embed = m.embed ? parseEmbed(m.url) : null;
+          return (
+            <li>
+              {m.type && <span class={`media-badge media-badge-${m.type}`}>{m.type}</span>}
+              <a href={m.url} {...(isExternal(m.url) ? { target: '_blank', rel: 'noopener noreferrer' } : {})}>
+                {m.title}
+              </a>
+              {(m.date || m.venue) && (
+                <span class="media-meta">
+                  {m.date && <> {formatDate(new Date(m.date))}</>}
+                  {m.date && m.venue && <> · </>}
+                  {m.venue && <>{m.venue}</>}
+                </span>
+              )}
+              {m.description && <p class="media-desc">{m.description}</p>}
+              {embed && (
+                <div class="media-embed">
+                  <iframe
+                    src={embed.src}
+                    title={m.title}
+                    loading="lazy"
+                    allow="accelerometer; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
+                    allowfullscreen
+                    referrerpolicy="strict-origin-when-cross-origin"
+                  ></iframe>
+                </div>
+              )}
+            </li>
+          );
+        })}
+      </ul>
+    </section>
+  ))}
+
+  {ytVideos.length > 0 && (
+    <section class="media-group">
+      <h2>{watchlist.heading}</h2>
+      <ul class="media-list">
+        {ytVideos.map((v) => (
+          <li>
+            <span class="media-badge media-badge-video">video</span>
+            <a href={v.url} target="_blank" rel="noopener noreferrer">{v.title}</a>
+            <span class="media-meta">{formatDate(v.published)} · {watchlist.venue}</span>
+          </li>
+        ))}
+      </ul>
+    </section>
+  )}
+</BaseLayout>
+
+<style>
+  .media-group { margin-top: 1.2em; }
+  .media-group h2 { margin-bottom: 0.2em; }
+  .media-subnote { font-family: var(--sans); font-size: 0.85em; color: var(--text-muted); margin-top: 0.2em; }
+  .media-list { list-style: none; padding: 0; margin: 0.3em 0 0; }
+  .media-list li { padding: 0.6em 0; line-height: 1.5; }
+  .media-list li + li { border-top: 1px dotted var(--border-soft); }
+  .media-badge {
+    display: inline-block;
+    font-family: var(--sans);
+    font-size: 0.7em;
+    font-weight: normal;
+    padding: 0.1em 0.55em;
+    margin-right: 0.5em;
+    border: 1px solid var(--border);
+    background: #fff;
+    color: var(--text-muted);
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+    vertical-align: middle;
+  }
+  .media-meta { font-family: var(--sans); font-size: 0.85em; color: var(--text-muted); margin-left: 0.4em; }
+  .media-desc { color: var(--text-muted); margin: 0.25em 0 0 0; }
+  .media-embed {
+    position: relative;
+    width: 100%;
+    max-width: 640px;
+    aspect-ratio: 16 / 9;
+    margin: 0.6em 0 0.2em;
+    border: 1px solid var(--border);
+    background: #000;
+  }
+  .media-embed iframe { width: 100%; height: 100%; border: 0; display: block; }
+</style>

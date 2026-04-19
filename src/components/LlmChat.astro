@@ -1,0 +1,639 @@
+---
+import { Icon } from 'astro-icon/components';
+
+interface Props {
+  model?: string;
+  userLabel?: string;
+  accent?: string;
+  thinkingWords?: string[];
+  speed?: 'slow' | 'normal' | 'fast';
+  initialDelayMs?: number;
+  interTurnDelayMs?: number;
+}
+
+const {
+  model = 'Assistant',
+  userLabel = 'You',
+  accent = '#d95a1e',
+  thinkingWords = ['Thinking', 'Pondering', 'Cogitating', 'Ruminating', 'Reasoning', 'Contemplating'],
+  speed = 'normal',
+  initialDelayMs = 800,
+  interTurnDelayMs = 700,
+} = Astro.props;
+---
+<div
+  class="llm-chat"
+  style={`--llm-accent: ${accent};`}
+  data-model={model}
+  data-user-label={userLabel}
+  data-speed={speed}
+  data-thinking={JSON.stringify(thinkingWords)}
+  data-initial-delay={initialDelayMs}
+  data-inter-turn-delay={interTurnDelayMs}
+>
+  <div class="llm-chat-header">
+    <span class="llm-chat-dot" aria-hidden="true"></span>
+    <span class="llm-chat-model">{model}</span>
+  </div>
+  <div class="llm-chat-convo" aria-live="polite" aria-atomic="false">
+    <slot />
+    <div class="llm-thinking" hidden aria-hidden="true">
+      <span class="llm-thinking-dots" aria-hidden="true"><span></span><span></span><span></span></span>
+      <span class="llm-thinking-word">Thinking</span>
+    </div>
+  </div>
+  <div class="llm-chat-input-row">
+    <div
+      class="llm-chat-input-field"
+      role="textbox"
+      aria-readonly="true"
+      aria-label="Message"
+      tabindex="0"
+    >
+      <span class="llm-chat-input-text" data-placeholder="Message the model..."></span><span class="llm-chat-input-cursor" aria-hidden="true"></span>
+    </div>
+    <button type="button" class="llm-chat-send" aria-label="Send message">
+      <Icon name="lucide:arrow-up" aria-hidden="true" />
+    </button>
+  </div>
+  <span class="llm-icon-templates" hidden aria-hidden="true">
+    <span data-icon-key="copy"><Icon name="lucide:copy" /></span>
+    <span data-icon-key="check"><Icon name="lucide:check" /></span>
+    <span data-icon-key="replay"><Icon name="lucide:refresh-ccw" /></span>
+  </span>
+</div>
+
+<style is:global>
+  .llm-chat {
+    font-family: var(--sans);
+    background: var(--content-bg);
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    margin: 1.4em 0;
+    overflow: hidden;
+    position: relative;
+    font-size: 0.95em;
+    line-height: 1.55;
+    color: var(--text);
+  }
+
+  .llm-chat-header {
+    display: flex;
+    align-items: center;
+    gap: 0.8em;
+    padding: 0.55em 0.9em;
+    background: #fafafa;
+    border-bottom: 1px solid var(--border-soft);
+    font-size: 0.78em;
+    text-transform: uppercase;
+    letter-spacing: 0.08em;
+    color: var(--text-muted);
+    font-weight: bold;
+  }
+  .llm-chat-dot {
+    display: inline-block;
+    width: 0.55em;
+    height: 0.55em;
+    border-radius: 50%;
+    background: var(--llm-accent);
+    box-shadow: 0 0 0 2px color-mix(in srgb, var(--llm-accent) 22%, transparent);
+  }
+
+  .llm-chat-convo {
+    display: flex;
+    flex-direction: column;
+    gap: 1.2em;
+    padding: 1em 1.1em 0.6em;
+    min-height: 2em;
+  }
+
+  .llm-chat .llm-turn[hidden] { display: none !important; }
+  .llm-chat .llm-turn-label {
+    display: block;
+    font-size: 0.88em;
+    color: var(--text);
+    margin-bottom: 0.35em;
+    font-weight: 700;
+  }
+  .llm-chat .llm-turn-label:empty { display: none; }
+
+  .llm-chat .llm-turn[data-role='user'] {
+    align-self: flex-end;
+    max-width: 80%;
+    display: flex;
+    flex-direction: column;
+    align-items: flex-end;
+  }
+  .llm-chat .llm-turn[data-role='user'] .llm-turn-label {
+    text-align: right;
+  }
+  .llm-chat .llm-turn[data-role='user'] .llm-turn-content {
+    display: inline-block;
+    text-align: left;
+    background: #ececec;
+    border: 1px solid #d4d4d4;
+    border-radius: 14px 14px 4px 14px;
+    padding: 0.55em 0.85em;
+    font-size: 0.95em;
+  }
+  .llm-chat .llm-turn[data-role='user'] .llm-turn-content > :first-child { margin-top: 0; }
+  .llm-chat .llm-turn[data-role='user'] .llm-turn-content > :last-child { margin-bottom: 0; }
+  .llm-chat .llm-turn[data-role='user'] p { margin: 0; }
+
+  .llm-chat .llm-turn[data-role='assistant'] {
+    align-self: stretch;
+    width: 100%;
+  }
+  .llm-chat .llm-turn[data-role='assistant'] .llm-turn-content > :first-child { margin-top: 0; }
+  .llm-chat .llm-turn[data-role='assistant'] .llm-turn-content > :last-child { margin-bottom: 0; }
+  .llm-chat .llm-turn[data-role='assistant'] p { margin: 0 0 0.7em; }
+  .llm-chat .llm-turn[data-role='assistant'] ul,
+  .llm-chat .llm-turn[data-role='assistant'] ol {
+    margin: 0.3em 0 0.7em;
+    padding-left: 1.3em;
+  }
+  .llm-chat .llm-turn[data-role='assistant'] li { margin: 0.15em 0; }
+  .llm-chat .llm-turn[data-role='assistant'] :not(pre) > code {
+    background: #f1f1f1;
+    border: 1px solid var(--border-soft);
+    border-radius: 3px;
+    padding: 0.05em 0.35em;
+    font-size: 0.9em;
+  }
+  .llm-chat .llm-turn[data-role='assistant'] pre {
+    background: #f6f6f6;
+    border: 1px solid var(--border-soft);
+    border-radius: 6px;
+    padding: 0.7em 0.9em;
+    margin: 0.4em 0 0.7em;
+    overflow-x: auto;
+    font-size: 0.88em;
+    line-height: 1.5;
+  }
+  .llm-chat .llm-turn[data-role='assistant'] .llm-turn-content * {
+    transition: opacity 160ms ease-out;
+  }
+  .llm-chat .llm-turn[data-role='assistant'] .llm-turn-content *:not(.llm-word):not(:has(.llm-word.shown)) {
+    opacity: 0;
+  }
+  .llm-chat .llm-turn[data-role='assistant'] pre code {
+    background: transparent;
+    border: 0;
+    padding: 0;
+    font-size: inherit;
+  }
+  .llm-chat .llm-turn[data-role='assistant'] a {
+    color: var(--link);
+    text-decoration: underline;
+  }
+  .llm-chat .llm-turn[data-role='assistant'] a:hover { color: var(--link-hover); }
+
+  .llm-chat .llm-word {
+    opacity: 0;
+    transition: opacity 120ms ease-out;
+  }
+  .llm-chat .llm-word.shown { opacity: 1; }
+
+  .llm-turn-actions {
+    display: flex;
+    gap: 0.1em;
+    margin: 0.35em 0 0 -0.35em;
+    font-size: 0.9em;
+  }
+  .llm-turn-actions[hidden] { display: none; }
+  .llm-turn-actions button {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    background: transparent;
+    border: 0;
+    color: var(--text-muted);
+    cursor: pointer;
+    padding: 0.35em;
+    border-radius: 4px;
+    transition: color 0.12s, background 0.12s;
+  }
+  .llm-turn-actions button[hidden] { display: none; }
+  .llm-turn-actions button:hover {
+    color: var(--llm-accent);
+    background: color-mix(in srgb, var(--llm-accent) 10%, transparent);
+  }
+  .llm-turn-actions button.is-copied { color: var(--llm-accent); }
+  .llm-turn-actions [data-icon],
+  .llm-turn-actions svg {
+    width: 1em;
+    height: 1em;
+    flex-shrink: 0;
+  }
+
+  .llm-thinking {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.5em;
+    padding: 0.35em 0.8em;
+    background: #f1f1f1;
+    border: 1px solid var(--border-soft);
+    border-radius: 999px;
+    font-size: 0.82em;
+    color: var(--text-muted);
+    align-self: flex-start;
+  }
+  .llm-thinking[hidden] { display: none; }
+  .llm-thinking-dots {
+    display: inline-flex;
+    gap: 2px;
+  }
+  .llm-thinking-dots > span {
+    width: 4px;
+    height: 4px;
+    border-radius: 50%;
+    background: var(--text-muted);
+    animation: llm-bounce 1.1s infinite ease-in-out both;
+  }
+  .llm-thinking-dots > span:nth-child(1) { animation-delay: -0.28s; }
+  .llm-thinking-dots > span:nth-child(2) { animation-delay: -0.14s; }
+  @keyframes llm-bounce {
+    0%, 80%, 100% { transform: scale(0.7); opacity: 0.5; }
+    40%           { transform: scale(1); opacity: 1; }
+  }
+  .llm-thinking-word {
+    background: linear-gradient(
+      90deg,
+      var(--text-muted) 0%,
+      #111 45%,
+      var(--text-muted) 90%
+    );
+    background-size: 220% 100%;
+    -webkit-background-clip: text;
+    background-clip: text;
+    -webkit-text-fill-color: transparent;
+    color: transparent;
+    animation: llm-shimmer 2.2s linear infinite;
+    font-weight: 500;
+  }
+  @keyframes llm-shimmer {
+    0%   { background-position: 200% 0; }
+    100% { background-position: -200% 0; }
+  }
+
+  .llm-chat-input-row {
+    display: flex;
+    align-items: center;
+    gap: 0.4em;
+    margin: 0.6em 0.9em 0.9em;
+    padding: 0.35em 0.4em 0.35em 0.95em;
+    background: #fff;
+    border: 1px solid var(--border);
+    border-radius: 22px;
+    box-shadow: 0 1px 3px rgba(0, 0, 0, 0.05);
+    transition: border-color 0.12s, box-shadow 0.12s;
+  }
+  .llm-chat-input-row[hidden] { display: none; }
+  .llm-chat-input-row:focus-within {
+    border-color: var(--llm-accent);
+    box-shadow: 0 0 0 3px color-mix(in srgb, var(--llm-accent) 18%, transparent);
+  }
+  .llm-chat-input-field {
+    flex: 1 1 auto;
+    min-width: 0;
+    font-family: var(--sans);
+    font-size: 0.95em;
+    color: var(--text);
+    background: transparent;
+    border: 0;
+    padding: 0.5em 0.1em;
+    cursor: text;
+    display: flex;
+    align-items: center;
+    min-height: 1.5em;
+    line-height: 1.4;
+    overflow: hidden;
+    white-space: nowrap;
+  }
+  .llm-chat-input-field:focus { outline: none; }
+  .llm-chat-input-text {
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    min-width: 0;
+  }
+  .llm-chat-input-text:empty::before {
+    content: attr(data-placeholder);
+    color: #9a9a9a;
+  }
+  .llm-chat-input-cursor {
+    display: inline-block;
+    width: 1.5px;
+    height: 1em;
+    background: var(--text);
+    margin-left: 2px;
+    flex: 0 0 auto;
+    animation: llm-blink 1.05s steps(1) infinite;
+    vertical-align: middle;
+  }
+  .llm-chat-input-field.is-disabled .llm-chat-input-cursor { display: none; }
+  @keyframes llm-blink {
+    0%, 50% { opacity: 1; }
+    50.01%, 100% { opacity: 0; }
+  }
+  .llm-chat-send {
+    flex: 0 0 auto;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 2em;
+    height: 2em;
+    border-radius: 50%;
+    border: 0;
+    background: var(--llm-accent);
+    color: #fff;
+    cursor: pointer;
+    transition: filter 0.12s, background-color 0.12s;
+  }
+  .llm-chat-send:hover:not(:disabled) { filter: brightness(1.08); }
+  .llm-chat-send:disabled {
+    background: #d4d4d4;
+    cursor: not-allowed;
+  }
+  .llm-chat-send [data-icon] { width: 1em; height: 1em; }
+
+
+  @media (prefers-reduced-motion: reduce) {
+    .llm-chat .llm-word { opacity: 1 !important; transition: none; }
+    .llm-thinking-word { animation: none; color: var(--text-muted); -webkit-text-fill-color: var(--text-muted); }
+    .llm-thinking-dots > span { animation: none; }
+    .llm-chat-input-cursor { animation: none; opacity: 1; }
+  }
+</style>
+
+<script>
+  (function () {
+    function wrapWords(root) {
+      const walker = document.createTreeWalker(root, NodeFilter.SHOW_TEXT, null);
+      const nodes = [];
+      let n;
+      while ((n = walker.nextNode())) nodes.push(n);
+      const words = [];
+      for (const node of nodes) {
+        const text = node.nodeValue;
+        if (!text) continue;
+        const parts = text.split(/(\s+)/);
+        const frag = document.createDocumentFragment();
+        let hasWord = false;
+        for (const part of parts) {
+          if (!part) continue;
+          if (/^\s+$/.test(part)) {
+            frag.appendChild(document.createTextNode(part));
+          } else {
+            const span = document.createElement('span');
+            span.className = 'llm-word';
+            span.textContent = part;
+            frag.appendChild(span);
+            words.push(span);
+            hasWord = true;
+          }
+        }
+        if (hasWord) node.parentNode.replaceChild(frag, node);
+      }
+      return words;
+    }
+
+    function wait(ms) { return new Promise((r) => setTimeout(r, ms)); }
+
+    function initChat(root) {
+      if (root.dataset.initialized === '1') return;
+      root.dataset.initialized = '1';
+
+      const convo = root.querySelector('.llm-chat-convo');
+      const turns = Array.from(convo.querySelectorAll(':scope > .llm-turn'));
+      if (turns.length === 0) return;
+
+      const thinking = root.querySelector('.llm-thinking');
+      const thinkingWord = root.querySelector('.llm-thinking-word');
+      const inputRow = root.querySelector('.llm-chat-input-row');
+      const input = root.querySelector('.llm-chat-input-field');
+      const inputText = root.querySelector('.llm-chat-input-text');
+      const sendBtn = root.querySelector('.llm-chat-send');
+
+      const speedMap = { slow: 90, normal: 55, fast: 30 };
+      const speed = speedMap[root.dataset.speed] || speedMap.normal;
+      let thinkingWords = ['Thinking'];
+      try {
+        const parsed = JSON.parse(root.dataset.thinking);
+        if (Array.isArray(parsed) && parsed.length > 0) thinkingWords = parsed;
+      } catch (e) { /* fallback */ }
+      const initialDelay = parseInt(root.dataset.initialDelay, 10) || 800;
+      const interTurnDelay = parseInt(root.dataset.interTurnDelay, 10) || 700;
+      const modelName = root.dataset.model || 'Assistant';
+      const userLabelText = root.dataset.userLabel || 'You';
+
+      const iconMap = {};
+      root.querySelectorAll(':scope > .llm-icon-templates > [data-icon-key]').forEach((el) => {
+        iconMap[el.dataset.iconKey] = el.innerHTML;
+      });
+      const COPY_ICON = iconMap.copy || '';
+      const CHECK_ICON = iconMap.check || '';
+      const REPLAY_ICON = iconMap.replay || '';
+
+      let lastAssistantIdx = -1;
+      for (let i = turns.length - 1; i >= 0; i--) {
+        if (turns[i].dataset.role === 'assistant') { lastAssistantIdx = i; break; }
+      }
+
+      for (let i = 0; i < turns.length; i++) {
+        const t = turns[i];
+        const labelEl = t.querySelector(':scope > .llm-turn-label');
+        if (labelEl) {
+          labelEl.textContent = t.dataset.role === 'user' ? userLabelText : modelName;
+        }
+        if (t.dataset.role === 'assistant') {
+          const content = t.querySelector(':scope > .llm-turn-content');
+          t._words = content ? wrapWords(content) : [];
+
+          const actions = document.createElement('div');
+          actions.className = 'llm-turn-actions';
+          actions.hidden = true;
+
+          const copyBtn = document.createElement('button');
+          copyBtn.type = 'button';
+          copyBtn.className = 'llm-turn-copy';
+          copyBtn.setAttribute('aria-label', 'Copy response');
+          copyBtn.innerHTML = COPY_ICON;
+          copyBtn.addEventListener('click', async () => {
+            const c = t.querySelector(':scope > .llm-turn-content');
+            const text = c ? c.textContent.replace(/\s+/g, ' ').trim() : '';
+            try {
+              await navigator.clipboard.writeText(text);
+              copyBtn.classList.add('is-copied');
+              copyBtn.innerHTML = CHECK_ICON;
+              setTimeout(() => {
+                copyBtn.classList.remove('is-copied');
+                copyBtn.innerHTML = COPY_ICON;
+              }, 1400);
+            } catch (e) { /* clipboard unavailable */ }
+          });
+          actions.appendChild(copyBtn);
+
+          if (i === lastAssistantIdx) {
+            const replayBtn = document.createElement('button');
+            replayBtn.type = 'button';
+            replayBtn.className = 'llm-turn-replay';
+            replayBtn.setAttribute('aria-label', 'Replay conversation');
+            replayBtn.innerHTML = REPLAY_ICON;
+            replayBtn.hidden = true;
+            replayBtn.addEventListener('click', () => { reset(); });
+            actions.appendChild(replayBtn);
+            t._replayBtn = replayBtn;
+          }
+
+          t.appendChild(actions);
+          t._actions = actions;
+          t._copyBtn = copyBtn;
+        }
+      }
+
+      let idx = 0;
+      let playing = false;
+      let cancelled = false;
+      let thinkingTimer = null;
+
+      function setInputDisabled(v) {
+        if (v) input.classList.add('is-disabled');
+        else input.classList.remove('is-disabled');
+      }
+
+      function primeInput() {
+        const next = turns.slice(idx).find((t) => t.dataset.role === 'user');
+        if (next) {
+          const content = next.querySelector(':scope > .llm-turn-content');
+          const raw = (content ? content.textContent : '').trim().replace(/\s+/g, ' ');
+          inputText.textContent = raw;
+          setInputDisabled(false);
+          sendBtn.disabled = false;
+          inputRow.hidden = false;
+        } else {
+          inputText.textContent = '';
+          inputRow.hidden = true;
+        }
+      }
+
+      function showThinking() {
+        thinking.hidden = false;
+        let wi = 0;
+        thinkingWord.textContent = thinkingWords[0];
+        thinkingTimer = setInterval(() => {
+          wi = (wi + 1) % thinkingWords.length;
+          thinkingWord.textContent = thinkingWords[wi];
+        }, 900);
+      }
+
+      function hideThinking() {
+        if (thinkingTimer) { clearInterval(thinkingTimer); thinkingTimer = null; }
+        thinking.hidden = true;
+      }
+
+      async function playFrom(startIdx) {
+        if (playing) return;
+        playing = true;
+        cancelled = false;
+        sendBtn.disabled = true;
+        setInputDisabled(true);
+
+        for (let i = startIdx; i < turns.length; i++) {
+          if (cancelled) break;
+          const t = turns[i];
+          if (t.dataset.role === 'user') {
+            t.hidden = false;
+            inputText.textContent = '';
+            await wait(260);
+          } else {
+            showThinking();
+            await wait(initialDelay);
+            if (cancelled) break;
+            hideThinking();
+            t.hidden = false;
+            for (const w of t._words || []) {
+              if (cancelled) break;
+              w.classList.add('shown');
+              await wait(speed);
+            }
+            if (cancelled) break;
+            if (t._actions) t._actions.hidden = false;
+            if (t._replayBtn) t._replayBtn.hidden = false;
+            await wait(interTurnDelay);
+          }
+          idx = i + 1;
+          if (!cancelled) primeInput();
+        }
+
+        hideThinking();
+        playing = false;
+
+        if (!cancelled) {
+          inputRow.hidden = true;
+        }
+      }
+
+      function revealLeadingAssistants() {
+        while (idx < turns.length && turns[idx].dataset.role === 'assistant') {
+          const t = turns[idx];
+          t.hidden = false;
+          if (t._words) t._words.forEach((w) => w.classList.add('shown'));
+          if (t._actions) t._actions.hidden = false;
+          if (t._replayBtn) t._replayBtn.hidden = false;
+          idx++;
+        }
+      }
+
+      function reset() {
+        cancelled = true;
+        hideThinking();
+        for (const t of turns) {
+          t.hidden = true;
+          if (t._words) t._words.forEach((w) => w.classList.remove('shown'));
+          if (t._actions) t._actions.hidden = true;
+          if (t._replayBtn) t._replayBtn.hidden = true;
+        }
+        idx = 0;
+        playing = false;
+        revealLeadingAssistants();
+        primeInput();
+      }
+
+      sendBtn.addEventListener('click', () => {
+        if (!playing) playFrom(idx);
+      });
+      input.addEventListener('keydown', (e) => {
+        if (e.key === 'Enter' && !playing) {
+          e.preventDefault();
+          playFrom(idx);
+        }
+      });
+
+      if (typeof matchMedia === 'function' && matchMedia('(prefers-reduced-motion: reduce)').matches) {
+        for (const t of turns) {
+          t.hidden = false;
+          if (t._words) t._words.forEach((w) => w.classList.add('shown'));
+          if (t._actions) t._actions.hidden = false;
+          if (t._replayBtn) t._replayBtn.hidden = false;
+        }
+        thinking.hidden = true;
+        inputRow.hidden = true;
+        return;
+      }
+
+      revealLeadingAssistants();
+      primeInput();
+    }
+
+    function initAll() {
+      document.querySelectorAll('.llm-chat').forEach(initChat);
+    }
+
+    if (document.readyState === 'loading') {
+      document.addEventListener('DOMContentLoaded', initAll);
+    } else {
+      initAll();
+    }
+  })();
+</script>

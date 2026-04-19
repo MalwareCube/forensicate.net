@@ -1,0 +1,309 @@
+---
+import BaseLayout from '~/layouts/BaseLayout.astro';
+import './styles.css';
+---
+<BaseLayout
+  title="Timestamp Converter"
+  description="Convert between Unix (seconds, milliseconds, microseconds, nanoseconds), Windows FILETIME, Chrome/WebKit, Mac Absolute/Cocoa, HFS+, OLE Automation, DOS date+time, and ISO 8601. Bidirectional, with timezone support. Runs entirely in your browser."
+>
+  <h1>Timestamp Converter</h1>
+  <p>
+    Paste a timestamp in any supported format and see it rendered in every other, side by side. The format is auto-detected, so a raw FILETIME, a Unix epoch, or an ISO string all work without picking one manually. Useful for correlating artefacts that store time differently: Windows event logs, browser history, ZIP/FAT entries, and HFS+ metadata.
+  </p>
+  <p class="post-meta">Everything runs entirely in your browser, so nothing ever leaves your machine.</p>
+
+  <div class="decoder" id="ts">
+    <label for="ts-input">Value</label>
+    <input id="ts-input" class="ts-input" type="text" spellcheck="false" placeholder="e.g. 1765000000, 133500000000000000, 2026-01-15T12:00:00Z" />
+
+    <div class="ts-options">
+      <div class="ts-option">
+        <label for="ts-format">Interpret as</label>
+        <select id="ts-format">
+          <option value="auto">Auto-detect</option>
+          <option value="iso">ISO 8601 / human date</option>
+          <option value="unix_s">Unix seconds</option>
+          <option value="unix_ms">Unix milliseconds</option>
+          <option value="unix_us">Unix microseconds</option>
+          <option value="unix_ns">Unix nanoseconds</option>
+          <option value="filetime">Windows FILETIME (100ns since 1601-01-01)</option>
+          <option value="filetime_hex">Windows FILETIME (hex)</option>
+          <option value="chrome">Chrome/WebKit (µs since 1601-01-01)</option>
+          <option value="mac_abs">Mac Absolute / Cocoa (s since 2001-01-01)</option>
+          <option value="hfs">HFS+ (s since 1904-01-01, local)</option>
+          <option value="hfs_utc">HFS+ UTC (s since 1904-01-01)</option>
+          <option value="ole">OLE Automation (days since 1899-12-30)</option>
+          <option value="dos">DOS date+time (32-bit, hex or int)</option>
+        </select>
+      </div>
+      <div class="ts-option">
+        <label for="ts-tz">Display timezone</label>
+        <select id="ts-tz">
+          <option value="UTC">UTC</option>
+          <option value="local">Local (this browser)</option>
+        </select>
+      </div>
+    </div>
+
+    <div class="controls">
+      <button type="button" data-action="now">Use current time</button>
+      <button type="button" data-action="clear">Clear</button>
+    </div>
+
+    <p class="error" id="ts-error" role="status" aria-live="polite"></p>
+
+    <div id="ts-results"></div>
+  </div>
+
+  <script is:inline>
+    (function () {
+      const root = document.getElementById('ts');
+      if (!root) return;
+      const input = root.querySelector('#ts-input');
+      const fmtSel = root.querySelector('#ts-format');
+      const tzSel = root.querySelector('#ts-tz');
+      const error = root.querySelector('#ts-error');
+      const out = root.querySelector('#ts-results');
+
+      const FT_EPOCH_MS = -11644473600000;
+      const MAC_EPOCH_MS = 978307200000;
+      const HFS_EPOCH_MS = -2082844800000;
+      const OLE_EPOCH_MS = Date.UTC(1899, 11, 30);
+      const FT_EPOCH_BIG = -11644473600000n;
+
+      const pad2 = (n) => String(n).padStart(2, '0');
+
+      function fmtISO(ms, tz) {
+        if (!isFinite(ms)) return '-';
+        const d = new Date(ms);
+        if (isNaN(d.getTime())) return '-';
+        if (tz === 'UTC') return d.toISOString().replace('T', ' ').replace(/\.\d+Z$/, 'Z').replace('Z', ' UTC');
+        if (tz === 'local') {
+          const off = -d.getTimezoneOffset();
+          const sign = off >= 0 ? '+' : '-';
+          const oh = pad2(Math.floor(Math.abs(off) / 60));
+          const om = pad2(Math.abs(off) % 60);
+          return `${d.getFullYear()}-${pad2(d.getMonth() + 1)}-${pad2(d.getDate())} ${pad2(d.getHours())}:${pad2(d.getMinutes())}:${pad2(d.getSeconds())} ${sign}${oh}:${om}`;
+        }
+        const m = /^([+-])(\d{2}):(\d{2})$/.exec(tz);
+        if (!m) return '-';
+        const sign = m[1] === '+' ? 1 : -1;
+        const offMin = sign * (parseInt(m[2], 10) * 60 + parseInt(m[3], 10));
+        const adj = new Date(ms + offMin * 60000);
+        return `${adj.getUTCFullYear()}-${pad2(adj.getUTCMonth() + 1)}-${pad2(adj.getUTCDate())} ${pad2(adj.getUTCHours())}:${pad2(adj.getUTCMinutes())}:${pad2(adj.getUTCSeconds())} ${tz}`;
+      }
+
+      function populateTimezones() {
+        const offsets = [];
+        for (let h = -12; h <= 14; h++) {
+          if (h === 0) continue;
+          const sign = h >= 0 ? '+' : '-';
+          offsets.push({ value: `${sign}${pad2(Math.abs(h))}:00`, total: h * 60 });
+        }
+        const fractional = [[-1, 9, 30], [-1, 3, 30], [1, 3, 30], [1, 4, 30], [1, 5, 30], [1, 5, 45], [1, 6, 30], [1, 8, 45], [1, 9, 30], [1, 10, 30], [1, 12, 45]];
+        for (const [s, h, m] of fractional) {
+          offsets.push({ value: `${s > 0 ? '+' : '-'}${pad2(h)}:${pad2(m)}`, total: s * (h * 60 + m) });
+        }
+        offsets.sort((a, b) => a.total - b.total);
+        for (const o of offsets) {
+          const opt = document.createElement('option');
+          opt.value = o.value;
+          opt.textContent = `UTC${o.value}`;
+          tzSel.appendChild(opt);
+        }
+      }
+
+      function parseNumber(s) {
+        s = s.trim().replace(/[_,]/g, '');
+        if (/^0x[0-9a-f]+$/i.test(s)) return parseInt(s, 16);
+        if (/^-?\d+(\.\d+)?$/.test(s)) return Number(s);
+        return NaN;
+      }
+
+      function parseHex(s) {
+        s = s.trim().replace(/^0x/i, '');
+        if (/^[0-9a-f]+$/i.test(s)) return parseInt(s, 16);
+        return NaN;
+      }
+
+      function parseBigInt(s) {
+        s = s.trim().replace(/[_,]/g, '');
+        if (!/^-?\d+$/.test(s)) return null;
+        try { return BigInt(s); } catch { return null; }
+      }
+
+      function parseHexBig(s) {
+        s = s.trim().replace(/^0x/i, '');
+        if (!/^[0-9a-f]+$/i.test(s)) return null;
+        try { return BigInt('0x' + s); } catch { return null; }
+      }
+
+      function bigToMsWithRemainder(big, divisor) {
+        const q = big / divisor;
+        const r = big % divisor;
+        return Number(q) + Number(r) / Number(divisor);
+      }
+
+      function dosToMs(v) {
+        if (!isFinite(v)) return NaN;
+        const n = v >>> 0;
+        const date = (n >>> 16) & 0xffff;
+        const time = n & 0xffff;
+        const year = 1980 + ((date >> 9) & 0x7f);
+        const month = (date >> 5) & 0x0f;
+        const day = date & 0x1f;
+        const hour = (time >> 11) & 0x1f;
+        const minute = (time >> 5) & 0x3f;
+        const second = (time & 0x1f) * 2;
+        if (!month || !day) return NaN;
+        return Date.UTC(year, month - 1, day, hour, minute, second);
+      }
+
+      function msToDos(ms) {
+        const d = new Date(ms);
+        const year = d.getUTCFullYear();
+        if (year < 1980 || year > 2107) return null;
+        const date = ((year - 1980) << 9) | ((d.getUTCMonth() + 1) << 5) | d.getUTCDate();
+        const time = (d.getUTCHours() << 11) | (d.getUTCMinutes() << 5) | (d.getUTCSeconds() >> 1);
+        return ((date << 16) | time) >>> 0;
+      }
+
+      function autoDetect(s) {
+        const v = s.trim();
+        if (!v) return null;
+        if (/^\d{4}-\d{2}-\d{2}/.test(v)) return 'iso';
+        if (/^0x[0-9a-f]+$/i.test(v)) return 'filetime_hex';
+        if (/^[0-9a-f]{16}$/i.test(v) && /[a-f]/i.test(v)) return 'filetime_hex';
+        if (/[a-z]/i.test(v)) return 'iso';
+        const n = parseNumber(v);
+        if (!isFinite(n)) return null;
+        const abs = Math.abs(n);
+        if (abs > 5e17) return 'unix_ns';
+        if (abs > 5e16) return 'filetime';
+        if (abs > 1e16) return 'chrome';
+        if (abs > 1e14) return 'unix_us';
+        if (abs > 1e11) return 'unix_ms';
+        return 'unix_s';
+      }
+
+      function toMs(mode, raw) {
+        const s = raw.trim();
+        if (mode === 'iso') {
+          const n = Date.parse(s);
+          return isNaN(n) ? NaN : n;
+        }
+        if (mode === 'filetime_hex') {
+          const h = parseHexBig(s);
+          return h == null ? NaN : bigToMsWithRemainder(h, 10000n) + FT_EPOCH_MS;
+        }
+        if (mode === 'filetime') {
+          const big = parseBigInt(s);
+          if (big == null) return NaN;
+          return bigToMsWithRemainder(big, 10000n) + FT_EPOCH_MS;
+        }
+        if (mode === 'chrome') {
+          const big = parseBigInt(s);
+          if (big == null) return NaN;
+          return bigToMsWithRemainder(big, 1000n) + FT_EPOCH_MS;
+        }
+        if (mode === 'unix_ns') {
+          const big = parseBigInt(s);
+          if (big == null) return NaN;
+          return bigToMsWithRemainder(big, 1000000n);
+        }
+        const n = parseNumber(s);
+        if (!isFinite(n)) return NaN;
+        switch (mode) {
+          case 'unix_s': return n * 1000;
+          case 'unix_ms': return n;
+          case 'unix_us': return n / 1000;
+          case 'mac_abs': return n * 1000 + MAC_EPOCH_MS;
+          case 'hfs_utc': return n * 1000 + HFS_EPOCH_MS;
+          case 'hfs': {
+            const utcMs = n * 1000 + HFS_EPOCH_MS;
+            return utcMs + new Date(utcMs).getTimezoneOffset() * 60000;
+          }
+          case 'ole': return n * 86400000 + OLE_EPOCH_MS;
+          case 'dos': {
+            const v = /^0x/i.test(s) ? parseHex(s) : parseNumber(s);
+            return dosToMs(v);
+          }
+        }
+        return NaN;
+      }
+
+      function rows(ms, tz) {
+        if (!isFinite(ms) || isNaN(ms)) return [];
+        const r = [];
+        const msInt = BigInt(Math.round(ms));
+        r.push(['ISO 8601 (UTC)', new Date(ms).toISOString()]);
+        r.push(['Human', fmtISO(ms, tz)]);
+        r.push(['Unix seconds', String(Math.floor(ms / 1000))]);
+        r.push(['Unix milliseconds', msInt.toString()]);
+        r.push(['Unix microseconds', (msInt * 1000n).toString()]);
+        r.push(['Unix nanoseconds', (msInt * 1000000n).toString()]);
+        const ft = (msInt - FT_EPOCH_BIG) * 10000n;
+        r.push(['Windows FILETIME', ft.toString()]);
+        r.push(['Windows FILETIME (hex)', ft >= 0n ? '0x' + ft.toString(16).padStart(16, '0') : '- (pre-1601)']);
+        const chrome = (msInt - FT_EPOCH_BIG) * 1000n;
+        r.push(['Chrome / WebKit', chrome.toString()]);
+        r.push(['Mac Absolute / Cocoa', String((ms - MAC_EPOCH_MS) / 1000)]);
+        r.push(['HFS+ (UTC)', String(Math.round((ms - HFS_EPOCH_MS) / 1000))]);
+        r.push(['OLE Automation', String((ms - OLE_EPOCH_MS) / 86400000)]);
+        const dos = msToDos(ms);
+        r.push(['DOS date+time', dos == null ? '- (out of range)' : `${dos} (0x${dos.toString(16).padStart(8, '0')})`]);
+        return r;
+      }
+
+      function render() {
+        error.textContent = '';
+        out.textContent = '';
+        const raw = input.value;
+        if (!raw.trim()) return;
+        let mode = fmtSel.value;
+        if (mode === 'auto') mode = autoDetect(raw);
+        if (!mode) { error.textContent = 'Could not detect format. Pick one manually.'; return; }
+        const ms = toMs(mode, raw);
+        if (!isFinite(ms) || isNaN(ms)) { error.textContent = 'Could not parse that value as ' + mode + '.'; return; }
+
+        const table = document.createElement('table');
+        table.className = 'ts-table';
+        const tbody = document.createElement('tbody');
+        for (const [label, value] of rows(ms, tzSel.value)) {
+          const tr = document.createElement('tr');
+          const th = document.createElement('th');
+          th.scope = 'row';
+          th.textContent = label;
+          const td = document.createElement('td');
+          td.textContent = value;
+          tr.appendChild(th);
+          tr.appendChild(td);
+          tbody.appendChild(tr);
+        }
+        table.appendChild(tbody);
+        out.appendChild(table);
+      }
+
+      populateTimezones();
+
+      input.addEventListener('input', render);
+      fmtSel.addEventListener('change', render);
+      tzSel.addEventListener('change', render);
+      root.querySelectorAll('.controls button').forEach((btn) => {
+        btn.addEventListener('click', () => {
+          const action = btn.dataset.action;
+          if (action === 'now') {
+            input.value = new Date().toISOString();
+            fmtSel.value = 'iso';
+            render();
+          } else if (action === 'clear') {
+            input.value = '';
+            out.textContent = '';
+            error.textContent = '';
+          }
+        });
+      });
+    })();
+  </script>
+  <p class="post-meta tool-back"><a href="/tools/">&larr; All tools</a></p>
+</BaseLayout>

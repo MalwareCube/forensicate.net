@@ -1,0 +1,25 @@
+---
+import BaseLayout from '~/layouts/BaseLayout.astro';
+import PostsSubNav from '~/components/PostsSubNav.astro';
+import { getAllPosts, tagCounts, tagPath } from '~/lib/posts';
+
+const counts = tagCounts(await getAllPosts());
+const max = counts.reduce((m, c) => Math.max(m, c.count), 1);
+function sizeClass(count: number): string {
+  const ratio = count / max;
+  if (ratio > 0.75) return 'size-4';
+  if (ratio > 0.5) return 'size-3';
+  if (ratio > 0.25) return 'size-2';
+  return 'size-1';
+}
+---
+<BaseLayout title="Tags" description="Browse posts on forensicate.net by tag.">
+  <PostsSubNav />
+  <h1>Tags</h1>
+  <div class="tag-cloud">
+    {counts.map((c) => (
+      <a href={tagPath(c.tag)} class={sizeClass(c.count)}>{c.tag} <span class="muted">({c.count})</span></a>
+    ))}
+    {counts.length === 0 && <p>No tags yet.</p>}
+  </div>
+</BaseLayout>

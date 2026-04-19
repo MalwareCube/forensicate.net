@@ -1,0 +1,92 @@
+---
+import { Icon } from 'astro-icon/components';
+import { site, nav } from '~/site.config';
+
+interface Props {
+  pathname: string;
+}
+const { pathname } = Astro.props;
+
+function isCurrent(href: string): boolean {
+  if (href === '/') return pathname === '/' || pathname === '';
+  if (href.startsWith('/') && href.endsWith('/')) {
+    return pathname === href || pathname.startsWith(href);
+  }
+  return pathname === href;
+}
+---
+<header class="site-banner">
+  <div class="site-banner-inner">
+    <div class="site-banner-text">
+      <h1 class="site-title"><a href="/">{site.title}</a></h1>
+      <p class="site-tagline">{site.tagline}</p>
+    </div>
+    <div class="site-clock" aria-label="Current UTC time">
+      <time id="utc-clock-time">--:--:--</time> <span class="site-clock-label">UTC</span>
+    </div>
+  </div>
+</header>
+
+<script is:inline>
+  (function () {
+    const timeEl = document.getElementById('utc-clock-time');
+    if (!timeEl) return;
+    function pad(n) { return n.toString().padStart(2, '0'); }
+    function tick() {
+      const d = new Date();
+      const yyyy = d.getUTCFullYear();
+      const mm = pad(d.getUTCMonth() + 1);
+      const dd = pad(d.getUTCDate());
+      const hh = pad(d.getUTCHours());
+      const mi = pad(d.getUTCMinutes());
+      const ss = pad(d.getUTCSeconds());
+      timeEl.textContent = `${hh}:${mi}:${ss}`;
+      timeEl.setAttribute('datetime', `${yyyy}-${mm}-${dd}T${hh}:${mi}:${ss}Z`);
+    }
+    tick();
+    setInterval(tick, 1000);
+  })();
+</script>
+
+<style>
+  .site-banner-inner {
+    display: flex;
+    align-items: flex-end;
+    justify-content: space-between;
+    gap: 1em;
+  }
+  .site-banner-text { min-width: 0; }
+  .site-clock {
+    font-family: var(--mono, ui-monospace, SFMono-Regular, Menlo, monospace);
+    font-size: 1em;
+    letter-spacing: 0.05em;
+    white-space: nowrap;
+    flex-shrink: 0;
+  }
+  .site-clock-label {
+    font-family: var(--sans);
+    font-size: 0.8em;
+    color: #cccccc;
+    letter-spacing: 0.1em;
+    margin-left: 0.2em;
+  }
+  @media (max-width: 520px) {
+    .site-clock { display: none; }
+  }
+</style>
+<nav class="site-nav" aria-label="Primary">
+  <div class="site-nav-inner">
+    <ul>
+      {nav.map((link) => (
+        <li>
+          <a href={link.href} aria-current={isCurrent(link.href) ? 'page' : undefined}>{link.label}</a>
+        </li>
+      ))}
+    </ul>
+    <form class="site-search" role="search" action="/search/" method="get">
+      <label class="visually-hidden" for="site-search-input">Search</label>
+      <Icon name="lucide:search" class="site-search-icon" aria-hidden="true" />
+      <input id="site-search-input" type="search" name="q" placeholder="Search..." autocomplete="off" />
+    </form>
+  </div>
+</nav>

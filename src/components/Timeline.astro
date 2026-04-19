@@ -1,0 +1,108 @@
+---
+export interface TimelineEntry {
+  time: string;
+  host?: string;
+  event: string;
+  source?: string;
+  note?: string;
+}
+
+interface Props {
+  entries: TimelineEntry[];
+  title?: string;
+  timezone?: string;
+}
+
+const { entries, title, timezone } = Astro.props;
+const showHost = entries.some((e) => e.host);
+const showSource = entries.some((e) => e.source);
+---
+<figure class="timeline">
+  {(title || timezone) && (
+    <figcaption class="timeline-caption">
+      {title && <span class="timeline-title">{title}</span>}
+      {timezone && <span class="timeline-tz">times in {timezone}</span>}
+    </figcaption>
+  )}
+  <div class="timeline-scroll">
+    <table class="timeline-table">
+      <thead>
+        <tr>
+          <th scope="col">Time</th>
+          {showHost && <th scope="col">Host</th>}
+          <th scope="col">Event</th>
+          {showSource && <th scope="col">Source</th>}
+        </tr>
+      </thead>
+      <tbody>
+        {entries.map((e) => (
+          <tr>
+            <td class="timeline-time"><time>{e.time}</time></td>
+            {showHost && <td class="timeline-host">{e.host ?? ''}</td>}
+            <td class="timeline-event">
+              {e.event}
+              {e.note && <div class="timeline-note">{e.note}</div>}
+            </td>
+            {showSource && <td class="timeline-source">{e.source ?? ''}</td>}
+          </tr>
+        ))}
+      </tbody>
+    </table>
+  </div>
+</figure>
+
+<style>
+  .timeline {
+    margin: 1.2em 0;
+    padding: 0;
+    border: 1px solid var(--border);
+    background: #fff;
+  }
+  .timeline-caption {
+    display: flex;
+    justify-content: space-between;
+    gap: 1em;
+    font-family: var(--sans);
+    font-size: 0.85em;
+    color: var(--text-muted);
+    padding: 0.5em 0.8em;
+    border-bottom: 1px solid var(--border-soft);
+    background: #fafafa;
+  }
+  .timeline-title { font-weight: 600; color: var(--text); }
+  .timeline-tz { font-variant-numeric: tabular-nums; }
+  .timeline-scroll { overflow-x: auto; }
+  .timeline-table {
+    width: 100%;
+    border-collapse: collapse;
+    font-family: var(--mono);
+    font-size: 0.88em;
+    margin: 0;
+  }
+  .timeline-table th,
+  .timeline-table td {
+    text-align: left;
+    vertical-align: top;
+    padding: 0.4em 0.7em;
+    border-bottom: 1px dotted var(--border-soft);
+  }
+  .timeline-table th {
+    font-family: var(--sans);
+    font-size: 0.8em;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+    color: var(--text-muted);
+    font-weight: 600;
+    background: #fafafa;
+  }
+  .timeline-table tr:last-child td { border-bottom: 0; }
+  .timeline-time { white-space: nowrap; color: var(--text-muted); }
+  .timeline-host { white-space: nowrap; }
+  .timeline-source { white-space: nowrap; color: var(--text-muted); font-size: 0.92em; }
+  .timeline-note {
+    font-family: var(--serif);
+    color: var(--text-muted);
+    font-size: 0.95em;
+    margin-top: 0.2em;
+  }
+</style>

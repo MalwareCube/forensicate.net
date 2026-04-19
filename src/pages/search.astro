@@ -1,0 +1,188 @@
+---
+import BaseLayout from '~/layouts/BaseLayout.astro';
+---
+<BaseLayout title="Search" description="Search posts on forensicate.net.">
+  <h1>Search</h1>
+  <form id="search-form" role="search" method="get" action="/search/">
+    <input
+      id="search-page-input"
+      type="search"
+      name="q"
+      placeholder="search posts..."
+      autocomplete="off"
+      aria-label="Search posts"
+      style="width: 100%; font-family: var(--sans); font-size: 1em; border: 1px solid var(--border); padding: 0.5em 0.7em; background: #fff;"
+    />
+  </form>
+  <p id="search-status" class="post-meta" style="margin-top: 0.8em;"></p>
+  <div id="search-results"></div>
+  <div id="search-pagination" class="pagination" style="display: none;">
+    <span><button type="button" id="search-prev" aria-label="Newer search results">← newer</button></span>
+    <span class="page-info" id="search-page-info"></span>
+    <span><button type="button" id="search-next" aria-label="Older search results">older →</button></span>
+  </div>
+
+  <script is:inline>
+    (async function () {
+      const form = document.getElementById('search-form');
+      const input = document.getElementById('search-page-input');
+      const status = document.getElementById('search-status');
+      const out = document.getElementById('search-results');
+      const pager = document.getElementById('search-pagination');
+      const prevBtn = document.getElementById('search-prev');
+      const nextBtn = document.getElementById('search-next');
+      const pageInfo = document.getElementById('search-page-info');
+      const PAGE_SIZE = 10;
+      let pagefind = null;
+      let currentHits = [];
+      let currentQuery = '';
+      let currentPage = 1;
+
+      function params() { return new URLSearchParams(location.search); }
+
+      async function ensurePagefind() {
+        if (pagefind) return pagefind;
+        try {
+          pagefind = await import('/pagefind/pagefind.js');
+          await pagefind.options({ excerptLength: 30 });
+          await pagefind.init();
+        } catch (e) {
+          pagefind = { error: e };
+        }
+        return pagefind;
+      }
+
+      function formatDate(iso) {
+        if (!iso) return '';
+        const d = new Date(iso);
+        const p = (n) => String(n).padStart(2, '0');
+        return d.getUTCFullYear() + '-' + p(d.getUTCMonth() + 1) + '-' + p(d.getUTCDate());
+      }
+
+      async function renderPage() {
+        const totalPages = Math.max(1, Math.ceil(currentHits.length / PAGE_SIZE));
+        if (currentPage > totalPages) currentPage = totalPages;
+        if (currentPage < 1) currentPage = 1;
+        const start = (currentPage - 1) * PAGE_SIZE;
+        const slice = currentHits.slice(start, start + PAGE_SIZE);
+        const resolved = await Promise.all(slice.map((h) => h.data()));
+        out.textContent = '';
+        for (const r of resolved) {
+          const date = r.meta && r.meta.date ? formatDate(r.meta.date) : '';
+          const tagsStr = r.meta && r.meta.tags ? r.meta.tags : '';
+          const tags = tagsStr ? tagsStr.split('|').filter(Boolean) : [];
+          const title = (r.meta && r.meta.title) || r.url;
+          const type = r.meta && r.meta.type ? r.meta.type : 'post';
+
+          const article = document.createElement('article');
+          article.className = 'post-card';
+
+          const h2 = document.createElement('h2');
+          if (type === 'tool') {
+            const badge = document.createElement('span');
+            badge.className = 'search-badge';
+            badge.textContent = 'tool';
+            h2.appendChild(badge);
+            h2.appendChild(document.createTextNode(' '));
+          }
+          const titleLink = document.createElement('a');
+          titleLink.href = r.url;
+          titleLink.textContent = title;
+          h2.appendChild(titleLink);
+          article.appendChild(h2);
+
+          if (date) {
+            const meta = document.createElement('p');
+            meta.className = 'post-meta';
+            meta.textContent = date;
+            article.appendChild(meta);
+          }
+
+          const excerptP = document.createElement('p');
+          excerptP.className = 'excerpt';
+          if (r.excerpt) {
+            // Pagefind returns trusted HTML containing only <mark> highlight tags.
+            excerptP.innerHTML = '…' + r.excerpt + '…';
+          }
+          article.appendChild(excerptP);
+
+          const more = document.createElement('a');
+          more.className = 'read-more';
+          more.href = r.url;
+          more.textContent = '[ read more → ]';
+          article.appendChild(more);
+
+          if (tags.length) {
+            const tagsP = document.createElement('p');
+            tagsP.className = 'post-card-tags';
+            const label = document.createElement('span');
+            label.className = 'post-card-tags-label';
+            label.textContent = 'Tags:';
+            tagsP.appendChild(label);
+            for (const t of tags) {
+              const a = document.createElement('a');
+              a.href = '/tags/' + encodeURIComponent(t.toLowerCase()) + '/';
+              a.className = 'tag';
+              a.textContent = t;
+              tagsP.appendChild(a);
+            }
+            article.appendChild(tagsP);
+          }
+
+          out.appendChild(article);
+        }
+        if (totalPages > 1) {
+          pager.style.display = '';
+          pageInfo.textContent = 'page ' + currentPage + ' of ' + totalPages;
+          prevBtn.style.visibility = currentPage > 1 ? 'visible' : 'hidden';
+          nextBtn.style.visibility = currentPage < totalPages ? 'visible' : 'hidden';
+        } else {
+          pager.style.display = 'none';
+        }
+      }
+
+      async function run(q) {
+        q = (q || '').trim();
+        currentQuery = q;
+        currentPage = 1;
+        if (!q) {
+          status.textContent = '';
+          out.textContent = '';
+          pager.style.display = 'none';
+          return;
+        }
+        status.textContent = 'Searching...';
+        const pf = await ensurePagefind();
+        if (pf.error) {
+          status.textContent = 'Search is only available on the built site.';
+          return;
+        }
+        const search = await pf.search(q);
+        if (currentQuery !== q) return;
+        currentHits = search.results;
+        if (currentHits.length === 0) {
+          status.textContent = 'No matches for "' + q + '".';
+          out.textContent = '';
+          pager.style.display = 'none';
+          return;
+        }
+        status.textContent = currentHits.length + ' result' + (currentHits.length === 1 ? '' : 's') + ' for "' + q + '"';
+        await renderPage();
+      }
+
+      prevBtn.addEventListener('click', async () => { currentPage--; await renderPage(); window.scrollTo({ top: 0, behavior: 'smooth' }); });
+      nextBtn.addEventListener('click', async () => { currentPage++; await renderPage(); window.scrollTo({ top: 0, behavior: 'smooth' }); });
+
+      const initial = params().get('q') || '';
+      input.value = initial;
+      if (initial) run(initial);
+
+      let t;
+      input.addEventListener('input', () => {
+        clearTimeout(t);
+        t = setTimeout(() => run(input.value), 180);
+      });
+      form.addEventListener('submit', (e) => { e.preventDefault(); run(input.value); });
+    })();
+  </script>
+</BaseLayout>

@@ -1,0 +1,238 @@
+---
+import { Icon } from 'astro-icon/components';
+import BaseLayout from '~/layouts/BaseLayout.astro';
+import { tools, page, type ToolEntry } from '~/tools.config';
+
+function hrefFor(t: ToolEntry): string {
+  return t.link.kind === 'external' ? t.link.url : t.link.path;
+}
+
+function externalAttrs(t: ToolEntry) {
+  return t.link.kind === 'external'
+    ? { target: '_blank', rel: 'noopener noreferrer' }
+    : {};
+}
+
+function badgeSlug(category: string): string {
+  return category.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/(^-|-$)/g, '');
+}
+
+const sortedTools = [...tools].sort((a, b) => a.name.localeCompare(b.name));
+const featuredTools = sortedTools.filter((t) => t.featured);
+const categories = Array.from(new Set(tools.map((t) => t.category)));
+---
+<BaseLayout title={page.title} description={page.description}>
+  <h1>{page.title}</h1>
+  <p>{page.intro}</p>
+
+  {featuredTools.length > 0 && (
+    <section class="featured-tools">
+      <h2>Featured</h2>
+      <ul class="featured-list">
+        {featuredTools.map((t) => (
+          <li>
+            <Icon name="lucide:trending-up" class="featured-icon" aria-hidden="true" />
+            <a class="featured-name" href={hrefFor(t)} {...externalAttrs(t)}>{t.name}</a>
+            <span class="featured-sep"> : </span>
+            <span class="featured-desc">{t.description}</span>
+            {' '}
+            <a class="featured-more" href={hrefFor(t)} {...externalAttrs(t)}>
+              {t.link.kind === 'external' ? '[ open ]' : '[ view → ]'}
+            </a>
+          </li>
+        ))}
+      </ul>
+    </section>
+  )}
+
+  {featuredTools.length > 0 && <hr class="featured-divider" />}
+
+  {categories.length > 1 && (
+    <p class="tool-filter-label">Filter</p>
+  )}
+  {categories.length > 1 && (
+    <div class="tool-filter" role="group" aria-label="Filter tools by category">
+      <button type="button" data-filter="*" aria-pressed="true">All</button>
+      {categories.map((c) => (
+        <button type="button" data-filter={c} aria-pressed="false">{c}</button>
+      ))}
+    </div>
+  )}
+
+  <h2 id="tool-heading">All tools</h2>
+  <div id="tool-grid" class="tool-grid">
+    {sortedTools.map((t) => (
+      <article class="tool-card" data-category={t.category}>
+        <h3>
+          <a href={hrefFor(t)} {...externalAttrs(t)}>{t.name}</a>
+        </h3>
+        <p>{t.description}</p>
+        <p class="tool-meta"><span class={`tool-badge tool-badge-${badgeSlug(t.category)}`}>{t.category}</span></p>
+      </article>
+    ))}
+  </div>
+
+  <div id="tool-empty" style="display:none;">
+    <p>No tools match.</p>
+  </div>
+
+  <div id="tool-pagination" class="pagination" style="display: none;">
+    <span><button type="button" id="tool-prev" aria-label="Previous page of tools">← prev</button></span>
+    <span class="page-info" id="tool-page-info"></span>
+    <span><button type="button" id="tool-next" aria-label="Next page of tools">next →</button></span>
+  </div>
+
+  {tools.length === 0 && <p>{page.empty}</p>}
+
+  <script is:inline>
+    (function () {
+      const PAGE_SIZE = 10;
+      const filter = document.querySelector('.tool-filter');
+      const heading = document.getElementById('tool-heading');
+      const cards = Array.from(document.querySelectorAll('#tool-grid .tool-card'));
+      const empty = document.getElementById('tool-empty');
+      const pager = document.getElementById('tool-pagination');
+      const prevBtn = document.getElementById('tool-prev');
+      const nextBtn = document.getElementById('tool-next');
+      const pageInfo = document.getElementById('tool-page-info');
+
+      let currentFilter = '*';
+      let currentPage = 1;
+
+      function matching() {
+        return cards.filter((c) => currentFilter === '*' || c.getAttribute('data-category') === currentFilter);
+      }
+
+      function render() {
+        const visible = matching();
+        const total = visible.length;
+        const totalPages = Math.max(1, Math.ceil(total / PAGE_SIZE));
+        if (currentPage > totalPages) currentPage = totalPages;
+        if (currentPage < 1) currentPage = 1;
+        const start = (currentPage - 1) * PAGE_SIZE;
+        const end = start + PAGE_SIZE;
+
+        cards.forEach((c) => { c.style.display = 'none'; });
+        visible.slice(start, end).forEach((c) => { c.style.display = ''; });
+
+        heading.textContent = currentFilter === '*' ? 'All tools' : currentFilter;
+        empty.style.display = total === 0 ? '' : 'none';
+
+        if (totalPages > 1) {
+          pager.style.display = '';
+          pageInfo.textContent = 'page ' + currentPage + ' of ' + totalPages;
+          prevBtn.style.visibility = currentPage > 1 ? 'visible' : 'hidden';
+          nextBtn.style.visibility = currentPage < totalPages ? 'visible' : 'hidden';
+        } else {
+          pager.style.display = 'none';
+        }
+      }
+
+      if (filter) {
+        const buttons = filter.querySelectorAll('button[data-filter]');
+        buttons.forEach((btn) => {
+          btn.addEventListener('click', () => {
+            currentFilter = btn.getAttribute('data-filter');
+            currentPage = 1;
+            buttons.forEach((b) => b.setAttribute('aria-pressed', b === btn ? 'true' : 'false'));
+            render();
+          });
+        });
+      }
+
+      prevBtn.addEventListener('click', () => { currentPage--; render(); window.scrollTo({ top: 0, behavior: 'smooth' }); });
+      nextBtn.addEventListener('click', () => { currentPage++; render(); window.scrollTo({ top: 0, behavior: 'smooth' }); });
+
+      render();
+    })();
+  </script>
+</BaseLayout>
+
+<style>
+  .tool-filter-label {
+    font-family: var(--sans);
+    font-size: 0.85em;
+    color: var(--text-muted);
+    text-transform: uppercase;
+    letter-spacing: 0.08em;
+    margin: 0 0 0.3em;
+  }
+  .tool-filter {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.3em;
+    font-family: var(--sans);
+    font-size: 0.88em;
+    margin: 0.6em 0 0.2em;
+  }
+  .tool-filter button {
+    font-family: var(--sans);
+    font-size: 0.9em;
+    border: 1px solid var(--border);
+    background: #ececec;
+    padding: 0.25em 0.7em;
+    cursor: pointer;
+    color: var(--text);
+  }
+  .tool-filter button:hover { background: #dcdcdc; }
+  .tool-filter button[aria-pressed='true'] {
+    background: var(--content-bg);
+    font-weight: bold;
+  }
+  .tool-badge {
+    display: inline-block;
+    font-family: var(--sans);
+    font-size: 0.6em;
+    font-weight: normal;
+    padding: 0.15em 0.55em;
+    margin-right: 0.5em;
+    border: 1px solid var(--border);
+    background: #fff;
+    color: var(--text-muted);
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+    vertical-align: middle;
+  }
+  .tool-meta {
+    margin: 0.4em 0 0;
+  }
+  .featured-list {
+    list-style: none;
+    padding: 0;
+    margin: 0.5em 0 0;
+  }
+  .featured-list li {
+    padding: 0.4em 0;
+    line-height: 1.5;
+  }
+  .featured-list li + li {
+    border-top: 1px dotted var(--border-soft);
+  }
+  .featured-icon {
+    color: #d95a1e;
+    width: 1em;
+    height: 1em;
+    vertical-align: -0.125em;
+    margin-right: 0.4em;
+  }
+  .featured-name {
+    font-weight: bold;
+  }
+  .featured-sep {
+    color: var(--text-muted);
+  }
+  .featured-desc {
+    color: var(--text-muted);
+  }
+  .featured-more {
+    font-family: var(--sans);
+    font-size: 0.85em;
+    white-space: nowrap;
+    margin-left: 0.2em;
+  }
+  .featured-divider {
+    border: 0;
+    border-top: 1px solid var(--border);
+    margin: 1.6em 0;
+  }
+</style>

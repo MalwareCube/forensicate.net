@@ -1,0 +1,28 @@
+---
+import type { GetStaticPaths } from 'astro';
+import { render } from 'astro:content';
+import PostLayout from '~/layouts/PostLayout.astro';
+import { getAllPosts, getRoutablePosts, adjacent, type Post } from '~/lib/posts';
+import { mdxComponents } from '~/lib/mdx-components';
+
+export const getStaticPaths: GetStaticPaths = async () => {
+  const routable = await getRoutablePosts();
+  const listed = await getAllPosts();
+  return routable.map((post) => {
+    const { prev, next } = post.data.unlisted
+      ? { prev: undefined, next: undefined }
+      : adjacent(listed, post);
+    return {
+      params: { slug: post.id.replace(/\.(md|mdx)$/, '') },
+      props: { post, prev, next },
+    };
+  });
+};
+
+interface Props { post: Post; prev?: Post; next?: Post; }
+const { post, prev, next } = Astro.props;
+const { Content, headings } = await render(post);
+---
+<PostLayout post={post} prev={prev} next={next} headings={headings}>
+  <Content components={mdxComponents} />
+</PostLayout>

@@ -1,0 +1,184 @@
+---
+import { fetchRepo } from '~/lib/github';
+
+interface Props {
+  repo: string;
+}
+const { repo } = Astro.props;
+const data = await fetchRepo(repo);
+
+const languageColors: Record<string, string> = {
+  Python: '#3572a5',
+  PowerShell: '#012456',
+  JavaScript: '#f1e05a',
+  TypeScript: '#3178c6',
+  Go: '#00add8',
+  Rust: '#dea584',
+  C: '#555555',
+  'C++': '#f34b7d',
+  'C#': '#178600',
+  Shell: '#89e051',
+  Ruby: '#701516',
+  Java: '#b07219',
+  Kotlin: '#a97bff',
+  HTML: '#e34c26',
+  CSS: '#563d7c',
+  Astro: '#ff5a03',
+  Lua: '#000080',
+  Perl: '#0298c3',
+  Swift: '#f05138',
+};
+
+function formatCount(n: number): string {
+  if (n >= 1000) {
+    const k = n / 1000;
+    return k >= 10 ? `${Math.round(k)}k` : `${k.toFixed(1)}k`;
+  }
+  return String(n);
+}
+
+function visibilityLabel(v: 'public' | 'private' | 'internal'): string {
+  return v.charAt(0).toUpperCase() + v.slice(1);
+}
+
+const fallbackUrl = `https://github.com/${repo}`;
+---
+{data ? (
+  <a class="gh-card" href={data.url} target="_blank" rel="noopener noreferrer">
+    <div class="gh-card-header">
+      <svg class="gh-card-icon" aria-hidden="true" viewBox="0 0 16 16" width="16" height="16" fill="currentColor">
+        <path d="M2 2.5A2.5 2.5 0 0 1 4.5 0h8.75a.75.75 0 0 1 .75.75v12.5a.75.75 0 0 1-.75.75h-2.5a.75.75 0 0 1 0-1.5h1.75v-2h-8a1 1 0 0 0-.714 1.7.75.75 0 1 1-1.072 1.05A2.495 2.495 0 0 1 2 11.5Zm10.5-1h-8a1 1 0 0 0-1 1v6.708A2.486 2.486 0 0 1 4.5 9h8ZM5 12.25a.25.25 0 0 1 .25-.25h3.5a.25.25 0 0 1 .25.25v3.25a.25.25 0 0 1-.4.2l-1.45-1.087a.249.249 0 0 0-.3 0L5.4 15.7a.25.25 0 0 1-.4-.2Z"/>
+      </svg>
+      <span class="gh-card-name">
+        <span class="gh-card-owner">{data.owner}</span>
+        <span class="gh-card-sep">/</span>
+        <strong>{data.name}</strong>
+      </span>
+      <span class="gh-card-visibility">{visibilityLabel(data.visibility)}</span>
+      <svg class="gh-card-logo" aria-hidden="true" viewBox="0 0 16 16" width="16" height="16" fill="currentColor">
+        <path d="M8 0C3.58 0 0 3.58 0 8c0 3.54 2.29 6.53 5.47 7.59.4.07.55-.17.55-.38 0-.19-.01-.82-.01-1.49-2.01.37-2.53-.49-2.69-.94-.09-.23-.48-.94-.82-1.13-.28-.15-.68-.52-.01-.53.63-.01 1.08.58 1.23.82.72 1.21 1.87.87 2.33.66.07-.52.28-.87.51-1.07-1.78-.2-3.64-.89-3.64-3.95 0-.87.31-1.59.82-2.15-.08-.2-.36-1.02.08-2.12 0 0 .67-.21 2.2.82.64-.18 1.32-.27 2-.27.68 0 1.36.09 2 .27 1.53-1.04 2.2-.82 2.2-.82.44 1.1.16 1.92.08 2.12.51.56.82 1.27.82 2.15 0 3.07-1.87 3.75-3.65 3.95.29.25.54.73.54 1.48 0 1.07-.01 1.93-.01 2.2 0 .21.15.46.55.38A8.013 8.013 0 0 0 16 8c0-4.42-3.58-8-8-8z"/>
+      </svg>
+    </div>
+    {data.description && <p class="gh-card-desc">{data.description}</p>}
+    <div class="gh-card-meta">
+      {data.language && (
+        <span class="gh-card-lang">
+          <span
+            class="gh-card-lang-dot"
+            style={`background: ${languageColors[data.language] ?? '#9e9e9e'};`}
+          ></span>
+          <span>{data.language}</span>
+        </span>
+      )}
+      <span class="gh-card-stat" aria-label={`${data.stars} stars`}>
+        <svg viewBox="0 0 16 16" width="14" height="14" fill="currentColor" aria-hidden="true">
+          <path d="M8 .25a.75.75 0 0 1 .673.418l1.882 3.815 4.21.612a.75.75 0 0 1 .416 1.279l-3.046 2.97.719 4.192a.75.75 0 0 1-1.088.791L8 12.347l-3.766 1.98a.75.75 0 0 1-1.088-.79l.72-4.194L.818 6.374a.75.75 0 0 1 .416-1.28l4.21-.611L7.327.668A.75.75 0 0 1 8 .25Z"/>
+        </svg>
+        <span>{formatCount(data.stars)}</span>
+      </span>
+      <span class="gh-card-stat" aria-label={`${data.forks} forks`}>
+        <svg viewBox="0 0 16 16" width="14" height="14" fill="currentColor" aria-hidden="true">
+          <path d="M5 5.372v.878c0 .414.336.75.75.75h4.5a.75.75 0 0 0 .75-.75v-.878a2.25 2.25 0 1 1 1.5 0v.878a2.25 2.25 0 0 1-2.25 2.25h-1.5v2.128a2.251 2.251 0 1 1-1.5 0V8.5h-1.5A2.25 2.25 0 0 1 3.5 6.25v-.878a2.25 2.25 0 1 1 1.5 0ZM5 3.25a.75.75 0 1 0-1.5 0 .75.75 0 0 0 1.5 0Zm6.75.75a.75.75 0 1 0 0-1.5.75.75 0 0 0 0 1.5Zm-3 8.75a.75.75 0 1 0-1.5 0 .75.75 0 0 0 1.5 0Z"/>
+        </svg>
+        <span>{formatCount(data.forks)}</span>
+      </span>
+    </div>
+  </a>
+) : (
+  <a class="gh-card gh-card-fallback" href={fallbackUrl} target="_blank" rel="noopener noreferrer">
+    <div class="gh-card-header">
+      <svg class="gh-card-icon" aria-hidden="true" viewBox="0 0 16 16" width="16" height="16" fill="currentColor">
+        <path d="M2 2.5A2.5 2.5 0 0 1 4.5 0h8.75a.75.75 0 0 1 .75.75v12.5a.75.75 0 0 1-.75.75h-2.5a.75.75 0 0 1 0-1.5h1.75v-2h-8a1 1 0 0 0-.714 1.7.75.75 0 1 1-1.072 1.05A2.495 2.495 0 0 1 2 11.5Zm10.5-1h-8a1 1 0 0 0-1 1v6.708A2.486 2.486 0 0 1 4.5 9h8ZM5 12.25a.25.25 0 0 1 .25-.25h3.5a.25.25 0 0 1 .25.25v3.25a.25.25 0 0 1-.4.2l-1.45-1.087a.249.249 0 0 0-.3 0L5.4 15.7a.25.25 0 0 1-.4-.2Z"/>
+      </svg>
+      <span class="gh-card-name">github.com/{repo}</span>
+    </div>
+  </a>
+)}
+
+<style>
+  .gh-card {
+    display: block;
+    border: 1px solid #d0d7de;
+    padding: 1em 1.1em;
+    margin: 1.2em 0;
+    background: #fff;
+    text-decoration: none;
+    color: inherit;
+    font-family: var(--sans);
+    transition: border-color 0.15s ease;
+  }
+  .gh-card:hover {
+    border-color: #8c959f;
+  }
+  .gh-card::after { content: none; }
+
+  .gh-card-header {
+    display: flex;
+    align-items: center;
+    gap: 0.45em;
+    margin-bottom: 0.55em;
+  }
+  .gh-card-icon {
+    color: #636c76;
+    flex-shrink: 0;
+  }
+  .gh-card-name {
+    font-size: 0.95em;
+    color: #0969da;
+    font-weight: 500;
+  }
+  .gh-card-owner { font-weight: 400; }
+  .gh-card-sep { margin: 0 0.15em; font-weight: 400; }
+  .gh-card-name strong { font-weight: 700; }
+  .gh-card:hover .gh-card-name { text-decoration: underline; }
+
+  .gh-card-logo {
+    margin-left: auto;
+    color: #636c76;
+    flex-shrink: 0;
+  }
+
+  .gh-card-visibility {
+    display: inline-block;
+    margin-left: 0.5em;
+    padding: 0 0.55em;
+    font-size: 0.72em;
+    font-weight: 500;
+    line-height: 1.5;
+    color: #59636e;
+    border: 1px solid #d0d7de;
+    border-radius: 999px;
+    background: #fff;
+  }
+
+  .gh-card-desc {
+    color: #59636e;
+    font-size: 0.85em;
+    margin: 0 0 0.8em;
+    line-height: 1.45;
+  }
+  .gh-card-meta {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 1em;
+    font-size: 0.78em;
+    color: #636c76;
+  }
+  .gh-card-stat,
+  .gh-card-lang {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.35em;
+  }
+  .gh-card-lang-dot {
+    display: inline-block;
+    width: 0.78em;
+    height: 0.78em;
+    border-radius: 50%;
+    border: 1px solid rgba(0, 0, 0, 0.08);
+  }
+  .gh-card-fallback .gh-card-name {
+    color: var(--text-muted);
+    font-weight: 400;
+  }
+</style>

@@ -1,0 +1,100 @@
+---
+import type { MarkdownHeading } from 'astro';
+import BaseLayout from './BaseLayout.astro';
+import Giscus from '~/components/Giscus.astro';
+import SeriesBox from '~/components/SeriesBox.astro';
+import RelatedPosts from '~/components/RelatedPosts.astro';
+import TableOfContents from '~/components/TableOfContents.astro';
+import SideTableOfContents from '~/components/SideTableOfContents.astro';
+import Figure from '~/components/Figure.astro';
+import PostShareFooter from '~/components/PostShareFooter.astro';
+import { site } from '~/site.config';
+import { formatDate, postPath, readingTimeMinutes, excerpt, type Post } from '~/lib/posts';
+
+interface Props {
+  post: Post;
+  prev?: Post;
+  next?: Post;
+  headings?: MarkdownHeading[];
+}
+
+const { post, prev, next, headings = [] } = Astro.props;
+const showSideToc = headings.filter((h) => h.depth >= 2 && h.depth <= 4).length >= 3;
+const { title, description, pubDate, updatedDate, tags, banner, bannerAlt, bannerCaption } = post.data;
+const metaDescription = description ?? excerpt(post);
+const minutes = readingTimeMinutes(post);
+const slug = post.id.replace(/\.(md|mdx)$/, '');
+const ogImage = new URL(`/og/${slug}.png`, site.url).toString();
+const canonical = new URL(postPath(post), site.url).toString();
+
+const jsonLd = {
+  '@context': 'https://schema.org',
+  '@type': 'BlogPosting',
+  headline: title,
+  description: metaDescription,
+  datePublished: pubDate.toISOString(),
+  ...(updatedDate ? { dateModified: updatedDate.toISOString() } : {}),
+  author: { '@type': 'Person', name: site.author, url: site.url },
+  publisher: { '@type': 'Person', name: site.author, url: site.url },
+  mainEntityOfPage: canonical,
+  url: canonical,
+  image: ogImage,
+  keywords: tags.join(', '),
+  inLanguage: site.lang,
+};
+---
+<BaseLayout
+  title={title}
+  description={metaDescription}
+  ogType="article"
+  ogImage={ogImage}
+  jsonLd={jsonLd}
+  theatreAllowed
+>
+  {showSideToc && <SideTableOfContents slot="sidebarAppend" headings={headings} />}
+  <article data-pagefind-body data-pagefind-meta={`type:post, date:${pubDate.toISOString()}`}>
+    {tags.length > 0 && (
+      <div hidden data-pagefind-meta={`tags:${tags.join('|')}`}></div>
+    )}
+    {banner && (
+      <Figure src={banner} alt={bannerAlt ?? ''} caption={bannerCaption} className="post-banner" loading="eager" />
+    )}
+    <h1 class="post-title" data-pagefind-meta="title">{title}</h1>
+    <p class="post-meta">
+      Posted {formatDate(pubDate)} by {site.author}
+      <span class="dot"> · </span>
+      <span class="reading-time">{minutes} min read</span>
+      {updatedDate && (
+        <>
+          <span class="dot"> · </span>
+          <span class="updated">updated {formatDate(updatedDate)}</span>
+        </>
+      )}
+      <span class="dot"> · </span>
+      <button type="button" class="theatre-toggle" data-theatre-toggle>reader mode</button>
+    </p>
+
+    <SeriesBox post={post} />
+    <TableOfContents headings={headings} />
+
+    <div class="post-body">
+      <slot />
+    </div>
+
+    <PostShareFooter canonical={canonical} title={title} tags={tags} />
+
+    <nav class="post-nav" aria-label="Post navigation">
+      <span class="prev">
+        {prev ? <a href={postPath(prev)}>Previous post</a> : <span>Previous post</span>}
+      </span>
+      <span class="next">
+        {next ? <a href={postPath(next)}>Next post</a> : <span>Next post</span>}
+      </span>
+    </nav>
+
+    <RelatedPosts post={post} />
+
+    <Giscus />
+  </article>
+</BaseLayout>
+

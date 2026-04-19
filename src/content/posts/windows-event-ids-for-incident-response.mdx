@@ -1,0 +1,490 @@
+---
+title: "Windows Event IDs for Incident Response"
+description: "A working reference of the Windows event IDs of interest during triage, grouped by the investigative question they answer."
+pubDate: 2025-03-17
+updatedDate: 2026-04-17
+tags: ["windows", "event-logs", "incident-response", "cheatsheet"]
+categories: ["Cheatsheets"]
+---
+
+Event logs are commonly one of the first places analysts turn to during triage. When they are
+available (and properly configured), few artifacts on a Windows host are as rich. This cheatsheet groups commonly referenced event IDs by the investigative question they
+help answer.
+
+<Callout type="note">
+  This is a living cheatsheet. The "Last updated" date at the top of this post reflects the
+  latest revision.
+</Callout>
+
+## Interpreting event IDs
+
+A *log channel* (Windows sometimes calls it a *provider*) is the named event log that an
+event is written to: `Security`, `System`, `Application`, or one of the many
+`Microsoft-Windows-*` channels like `Microsoft-Windows-PowerShell/Operational`. 
+
+Windows event IDs are **not unique.** The same integer can mean very different things
+depending on the *provider* that emitted it. For example, event ID `104` in the `System`
+log (via the `Microsoft-Windows-Eventlog` provider) means **the log file was cleared**, a
+high-signal anti-forensics indicator (T1070.001). 
+
+The same integer `104`
+appears in other channels (for example, `Microsoft-Windows-TaskScheduler/Operational`)
+with a completely unrelated meaning. Because of this, every row in this cheatsheet pairs the channel (or provider) with the
+numeric ID.
+
+<Callout type="warning">
+  As best practice, refer to records by their **source/ID pair**, never by ID alone, whether you are filtering a log, writing a hunt query, or writing up findings.
+</Callout>
+
+## Authentication and logon
+
+These `Security` events can help answer *who* touched the host, *how* they authenticated (console, network,
+RDP, runas, etc.), and *when* they came and went. Together with the [logon-type codes](#logontype-reference-for-4624--4625),
+they are often a great place to look when reconstructing attacker access or
+validating insider activity.
+
+| ID | Log | Description |
+| --- | --- | --- |
+| `4624` | Security | Successful logon. `LogonType` tells you *how* the account authenticated. |
+| `4625` | Security | Failed logon. `Status` and `SubStatus` codes explain the reason. |
+| `4634` | Security | Logon session ended. Not always a user-initiated logoff (timeouts, token cleanup, and system actions also trigger it). |
+| `4647` | Security | User-initiated logoff (explicit action, e.g., Start → Sign out). |
+| `4648` | Security | Credentials were supplied for a new logon attempt (e.g., `runas`, scheduled tasks, remote-auth tooling). Does *not* imply that authentication succeeded. |
+| `4672` | Security | Special privileges assigned at logon. Token carries powerful rights like `SeDebugPrivilege`, typically for SYSTEM, administrator, or service accounts. |
+| `4778` | Security | Session reconnected (RDP, fast user switching). |
+| `4779` | Security | Session disconnected (e.g., closed RDP window). The user has *not* logged off. |
+| `4800` | Security | Workstation locked. |
+| `4801` | Security | Workstation unlocked. |
+
+<Callout type="tip">
+  To reconstruct a **logon session**, correlate the Logon ID (`TargetLogonId`) across `4624` and
+  `4634`, optionally including `4647` when present. The **Logon ID** ties events to a
+  specific logon session and is a reliable way to group activity.
+
+  **Note:** Not all sessions generate explicit logoff events, and session termination may not reflect true
+  user activity duration.
+</Callout>
+
+### LogonType reference for 4624 / 4625
+
+The `LogonType` field records *how* the authentication happened. Without it, a raw
+`4624` cannot distinguish a human logon from a service start or a network auth.
+
+| Type | Meaning |
+| --- | --- |
+| `2` | Interactive (console, keyboard). |
+| `3` | Network (SMB, WMI, RPC, most remote authentication). The broadest and noisiest type. |
+| `4` | Batch (scheduled task context). |
+| `5` | Service account start. |
+| `7` | Unlock (screen unlock). |
+| `8` | NetworkCleartext. Windows received the raw password (e.g., IIS Basic Auth) rather than a hash or ticket. |
+| `9` | NewCredentials (`runas /netonly`, common in lateral movement toolkits). |
+| `10` | RemoteInteractive (RDP). |
+| `11` | CachedInteractive (interactive logon using cached creds, offline DC). |
+
+For the full field-by-field reference, see Microsoft's documentation on [event 4624](https://learn.microsoft.com/en-us/windows/security/threat-protection/auditing/event-4624) and [event 4625](https://learn.microsoft.com/en-us/windows/security/threat-protection/auditing/event-4625).
+
+## Domain authentication (Domain Controllers)
+
+Domain Controllers broker Kerberos and NTLM authentication for the whole domain, so
+these events are a useful hunting ground for ticket abuse (golden/silver), Kerberoasting,
+AS-REP roasting, NTLM validation traces, and password-spray activity.
+
+| ID | Log | Description |
+| --- | --- | --- |
+| `4768` | Security (DC) | Kerberos TGT request (`AS-REQ`). Look for unusual client machines, encryption types, or abnormal request patterns. |
+| `4769` | Security (DC) | Kerberos service ticket request (`TGS-REQ`). Primary visibility point for Kerberoasting detection. Golden-ticket detection is indirect and relies on anomalies such as inconsistent ticket patterns, unusual encryption, or missing expected authentication chains. |
+| `4770` | Security (DC) | Kerberos service ticket renewed. |
+| `4771` | Security (DC) | Kerberos pre-authentication failed. A high volume of failures can suggest password spraying or credential guessing. AS-REP roasting does *not* trigger `4771`; those attempts succeed as `4768` events because pre-authentication is skipped entirely. |
+| `4776` | Security (DC) | NTLM credential validation (`MSV1_0`). Records source workstation and success/failure status. |
+| `4624` (type 3) | Security (DC) | A network logon hit a service on the DC (SMB, LDAP, RPC, and similar). This is a useful context and correlation signal, but it is not a forged-ticket detector on its own. |
+
+<Callout type="tip">
+  There is no single event that catches credential abuse. It requires a layered approach:
+  baseline what normal authentication looks like in your environment, then stack signals
+  (encryption types, source workstations, ticket flags, and failure ratios) and correlate
+  across events. Sadly, no one ID is a silver bullet.
+</Callout>
+
+## Account and group management
+
+These events track lifecycle changes to accounts and group membership, which makes them a
+reliable signal for persistence (attacker-created accounts), privilege escalation
+(additions to `Administrators` or `Remote Desktop Users`), and identity-object tampering.
+
+They live in the `Security` log, on a Domain Controller for domain objects or on the local
+host for local accounts.
+
+| ID | Log | Description |
+| --- | --- | --- |
+| `4720` | Security | User account created. |
+| `4722` | Security | User account enabled. |
+| `4723` | Security | User attempted to change own password. |
+| `4724` | Security | Administrator reset another account's password. |
+| `4725` | Security | User account disabled. |
+| `4726` | Security | User account deleted. |
+| `4738` | Security | User account changed (any attribute). |
+| `4740` | Security | User account locked out (records the source workstation). |
+| `4767` | Security | User account unlocked. |
+| `4781` | Security | Account name changed. |
+| `4728` / `4729` | Security (DC) | Member added / removed, security-enabled global group. |
+| `4732` / `4733` | Security | Member added / removed, security-enabled local group (watch Administrators, Remote Desktop Users). |
+| `4756` / `4757` | Security (DC) | Member added / removed, security-enabled universal group. |
+| `4798` | Security | User's local group membership enumerated. |
+| `4799` | Security | Security-enabled local group membership enumerated. |
+
+<Callout type="tip">
+  Every row above carries two principals: the **Subject** (who performed the action) and
+  the **Target** (the account or group that was modified). 
+  
+  The Subject is often the more
+  valuable field. It names *who* created a rogue account, *who* added a user to
+  Administrators, and *who* ran the enumeration. When hunting, filter on unexpected
+  Subjects, not just Targets.
+</Callout>
+
+## Process execution
+
+Process execution events can record details such as the binary, command-line arguments, user
+context, and parent process for each new process on the host. They can help reconstruct
+execution timelines, hunt living-off-the-land abuse, and flag anomalous parent-child
+relationships.
+
+Windows can be configured to record process creation as event ID `4688` in the `Security` channel. 
+
+[Sysmon](https://learn.microsoft.com/en-us/sysinternals/downloads/sysmon), part of the
+Sysinternals suite, can be installed to provide richer and more configurable process-creation telemetry
+under event ID `1` in `Microsoft-Windows-Sysmon/Operational`.
+
+**Note:** Process execution and command-line auditing are **not** enabled on Windows by default.
+
+| ID | Log | Description |
+| --- | --- | --- |
+| `4688` | Security | Process creation. `NewProcessName`, `ParentProcessName`, `CommandLine` (if enabled), and `TokenElevationType`. |
+| `4689` | Security | Process termination with exit code. |
+| `1` | `Microsoft-Windows-Sysmon/`<br/>`Operational` | Process create with hashes, parent info, user, and integrity level. |
+| `5` | `Microsoft-Windows-Sysmon/`<br/>`Operational` | Process terminated. |
+| `10` | `Microsoft-Windows-Sysmon/`<br/>`Operational` | ProcessAccess. Handle opens to `lsass.exe` are a classic credential-dumping signal (T1003.001). |
+
+<Callout type="warning">
+  Command-line visibility is non-negotiable in modern investigations. **Most
+  living-off-the-land abuse is defined entirely by its arguments**. Without them, 
+  the event just shows a signed Microsoft binary running and nothing else. 
+  
+  If your EDR is not already surfacing process-execution telemetry with command lines, enable `4688` (**Audit Process
+  Creation** and **Include command line in process creation events**, both off by
+  default) or deploy Sysmon with a tuned config.
+</Callout>
+
+## PowerShell activity
+
+PowerShell telemetry is split across two providers: 
+- The modern `Microsoft-Windows-PowerShell/Operational` channel
+- The legacy `Windows PowerShell` log 
+
+**Script block logging** (`Microsoft-Windows-PowerShell/Operational` `4104`) is the highest-signal event for post-exploitation because it captures the decoded script text even when the attacker delivered it obfuscated or base64-encoded.
+
+**Note:** The high-value modern PowerShell events (`4103`, `4104`, `4105` / `4106`) are **not** enabled by default.
+
+| ID | Log | Description |
+| --- | --- | --- |
+| `4103` | `Microsoft-Windows-PowerShell/Operational` | Pipeline / module logging. |
+| `4104` | `Microsoft-Windows-PowerShell/Operational` | Script block logging. Captures decoded script text, including deobfuscated payloads. |
+| `4105` / `4106` | `Microsoft-Windows-PowerShell/Operational` | Script block invocation start / stop. Off by default and noisy when enabled. |
+| `400` | `Windows PowerShell` | PowerShell engine started (state changed to Available). |
+| `403` | `Windows PowerShell` | PowerShell engine stopped. |
+| `600` | `Windows PowerShell` | Provider lifecycle (useful for custom providers). |
+| `800` | `Windows PowerShell` | Pipeline execution (legacy, noisy). |
+
+<Callout type="warning">
+  Even when `4104` is enabled, attackers can bypass it with a **PowerShell v2 downgrade**, 
+  since v2 predates script block logging entirely. If the v2
+  optional feature is still installed on the host, `4104`
+  visibility can disappear on demand.
+  [Removing the v2 engine](https://support.microsoft.com/en-us/topic/powershell-2-0-removal-from-windows-fe6d1edc-2ed2-4c33-b297-afe82a64200a)
+  (or alerting on its invocation) closes that gap.
+</Callout>
+
+## Services and drivers
+
+Services run as `SYSTEM` and survive reboots, which makes them a popular landing spot for persistence and privilege escalation. 
+Driver loads are worth watching for the same reason: a malicious or vulnerable driver gives an attacker kernel-level execution and a foothold that survives most remediation short of reimaging.
+
+| ID | Log | Description |
+| --- | --- | --- |
+| `7045` | System | Service installed. Includes `ServiceFileName` and `StartType` (T1543.003). |
+| `7036` | System | Service state change (start / stop). Noisy but useful for known-evil service names. |
+| `7034` | System | Service terminated unexpectedly. |
+| `7040` | System | Service start type changed (e.g., `Disabled` to `Auto`). |
+| `4697` | Security | Service installed (requires audit policy). |
+| `6` | `Microsoft-Windows-Sysmon/`<br/>`Operational` | Driver loaded. Pair with signature validation. |
+
+<Callout type="tip">
+  It's common to hunt for unsigned binaries, user-writable paths, and services
+  wrapping shell or scripting interpreters. For Sysmon Event ID `6`, signature checks aren't enough,
+  since attackers can abuse **legitimately signed but vulnerable drivers (BYOVD)**. Cross-reference
+  against the [Microsoft vulnerable driver block list](https://learn.microsoft.com/en-us/windows/security/application-security/application-control/windows-defender-application-control/design/microsoft-recommended-driver-block-rules).
+</Callout>
+
+## Scheduled tasks
+
+Scheduled tasks are a favourite persistence and privilege-escalation mechanism (T1053.005) because they run on a trigger, can execute as SYSTEM, and survive reboots. 
+
+Lifecycle events live in the `Security` log:
+
+| ID | Log | Description |
+| --- | --- | --- |
+| `4698` | Security | Scheduled task created. |
+| `4699` | Security | Scheduled task deleted. |
+| `4700` | Security | Scheduled task enabled. |
+| `4701` | Security | Scheduled task disabled. |
+| `4702` | Security | Scheduled task updated. |
+
+**Note:** These `Security` events depend on **Audit Other Object Access Events**, which is off by default, so they are often missing.
+
+Execution-level detail (registration, action start, per-task PID) surfaces in `Microsoft-Windows-TaskScheduler/Operational`:
+
+| ID | Log | Description |
+| --- | --- | --- |
+| `106` | `TaskScheduler/Operational` | Task registered. |
+| `140` | `TaskScheduler/Operational` | Task updated. |
+| `141` | `TaskScheduler/Operational` | Task deleted. |
+| `200` | `TaskScheduler/Operational` | Action started. |
+| `201` | `TaskScheduler/Operational` | Action completed. |
+| `129` | `TaskScheduler/Operational` | Task launched a new process (includes PID). |
+
+<Callout type="tip">
+  To reconstruct what a task actually executed, pivot on the PID recorded in `Microsoft-Windows-TaskScheduler/Operational` `129` and match it to the corresponding process creation event in `Security` `4688` or `Microsoft-Windows-Sysmon/Operational` `1`.
+</Callout>
+
+## Remote access and lateral movement
+
+Once an attacker has a foothold, they usually need to reach other hosts to escalate impact or move toward higher-value targets. Each remote-access transport (RDP, SMB, WinRM, and others) writes to its own channel, so reconstructing the movement path typically means correlating events across several logs by timestamp, source IP, and account.
+
+### RDP
+
+RDP activity is split across two Terminal Services channels: 
+- `RemoteConnectionManager/Operational` handles the initial network-level authentication to the listener
+- `LocalSessionManager/Operational` records the full lifecycle of the resulting session (logon, shell start, disconnect, reconnect, logoff). 
+
+Correlating events across both is usually necessary to reconstruct a full RDP session.
+
+| ID | Log | Description |
+| --- | --- | --- |
+| `1149` | `Microsoft-Windows-TerminalServices-`<br/>`RemoteConnectionManager/Operational` | User authenticated to RDP listener. |
+| `21` | `Microsoft-Windows-TerminalServices-`<br/>`LocalSessionManager/Operational` | Session logon. |
+| `22` | `Microsoft-Windows-TerminalServices-`<br/>`LocalSessionManager/Operational` | Shell start. |
+| `23` | `Microsoft-Windows-TerminalServices-`<br/>`LocalSessionManager/Operational` | Session logoff. |
+| `24` | `Microsoft-Windows-TerminalServices-`<br/>`LocalSessionManager/Operational` | Session disconnected. |
+| `25` | `Microsoft-Windows-TerminalServices-`<br/>`LocalSessionManager/Operational` | Session reconnection. |
+| `39` | `Microsoft-Windows-TerminalServices-`<br/>`LocalSessionManager/Operational` | Session disconnected by another session. |
+| `40` | `Microsoft-Windows-TerminalServices-`<br/>`LocalSessionManager/Operational` | Session disconnection reason codes. |
+
+### SMB / file shares
+
+SMB is a common lateral-movement vector (admin shares like `ADMIN$` and `C$`, tool staging, `psexec`-style service installs over the network) and all of the relevant activity lands in the `Security` log.
+
+| ID | Log | Description |
+| --- | --- | --- |
+| `5140` | Security | A network share was accessed. |
+| `5142` | Security | Network share added. |
+| `5144` | Security | Network share deleted. |
+| `5145` | Security | Detailed file share access check (per-object, very noisy but invaluable for specific-file hunts). |
+
+### WinRM / PowerShell Remoting
+
+WinRM carries `Invoke-Command`, `Enter-PSSession`, and the WS-Management protocol underneath them, making it a frequent vehicle for interactive lateral movement without dropping a shell on the remote host.
+
+Connection-level activity shows up in `Microsoft-Windows-WinRM/Operational`, but the actual commands run over the session are logged on the **target side** via the PowerShell events covered earlier (`Microsoft-Windows-PowerShell/Operational` `4104` in particular). 
+
+You typically need both sides of the coin to reconstruct what an attacker did.
+
+| ID | Log | Description |
+| --- | --- | --- |
+| `91` | `Microsoft-Windows-WinRM/Operational` | Session created. |
+| `142` | `Microsoft-Windows-WinRM/Operational` | WS-Management operation failed. |
+| `169` | `Microsoft-Windows-WinRM/Operational` | User authenticated successfully. |
+
+<Callout type="note">
+  Administrators are sometimes reluctant to enable PowerShell Remoting because attackers
+  can leverage it for lateral movement. The counter-argument is worth exploring.
+  
+  Unlike RDP, default PS Remoting authenticates with **Kerberos** (or **NTLM**) and does **not** leave the user's
+  credentials resident on the target host, so it avoids the LSASS credential-exposure
+  problem that makes RDP such a rich target for credential theft. (*CredSSP-based "double
+  hop" configurations do delegate credentials and lose this benefit, so they should be
+  avoided unless strictly required.*)
+
+  The forensic upside is where we gain the edge as defenders. Activity over PS Remoting
+  flows through the same PowerShell logging pipeline covered [earlier](#powershell-activity),
+  which makes it dramatically more observable than `psexec` over SMB or an interactive
+  RDP session.
+
+  The practical posture is to harden rather than forbid: restrict the WinRM listener
+  scope, firewall the default ports (`5985` HTTP and `5986` HTTPS) to management jump
+  hosts, disable CredSSP, and apply [Just Enough Administration (JEA)](https://learn.microsoft.com/en-us/powershell/scripting/security/remoting/jea/overview)
+  to constrain what a remoted session is permitted to do.
+</Callout>
+
+## Defense evasion and log tampering
+
+Log tampering is one of the strongest single indicators of deliberate attacker activity, since log clears, audit-policy changes, and logging-service shutdowns rarely have benign causes on a production host.
+
+| ID | Log | Description |
+| --- | --- | --- |
+| `1100` | Security | Event log service shutting down. |
+| `1102` | Security | **Security log was cleared.** Nearly always worth alerting on. |
+| `104` | System | System log cleared. |
+| `4719` | Security | System audit policy changed. |
+| `4739` | Security | Domain policy changed. |
+| `4907` | Security | Object audit settings changed. |
+
+Associated ATT&CK coverage: T1070.001 (Clear Windows Event Logs), T1562.002 (Disable Windows
+Event Logging).
+
+<Callout type="tip">
+  `Security` `1102` gets most of the attention, but `Security` `4719` (audit policy changed)
+  is the stealthier move. Disabling a subcategory silences future events without tripping a
+  log-clear alert, and the gap only shows up in what *stops* being logged. Treat `4719` with
+  the same weight as `1102`.
+</Callout>
+
+## Microsoft Defender
+
+Defender activity is logged to `Microsoft-Windows-Windows Defender/Operational` and captures both malware detections and configuration changes. 
+The configuration events are often the higher-signal half for DFIR, since disabling real-time protection or tampering with Defender settings is a well-known pre-ransomware staging step. 
+
+Microsoft publishes the [complete Defender Antivirus event ID reference](https://learn.microsoft.com/en-us/defender-endpoint/troubleshoot-microsoft-defender-antivirus) with full field-level detail for every event.
+
+| ID | Log | Description |
+| --- | --- | --- |
+| `1116` | `Microsoft-Windows-Windows`<br/>`Defender/Operational` | Malware detected. |
+| `1117` | `Microsoft-Windows-Windows`<br/>`Defender/Operational` | Action taken against detected malware. |
+| `1118` | `Microsoft-Windows-Windows`<br/>`Defender/Operational` | Action failed. |
+| `1119` | `Microsoft-Windows-Windows`<br/>`Defender/Operational` | Critical action failed. |
+| `1121` | `Microsoft-Windows-Windows`<br/>`Defender/Operational` | Blocked by attack surface reduction rule. |
+| `1122` | `Microsoft-Windows-Windows`<br/>`Defender/Operational` | Attack surface reduction rule in audit mode triggered. |
+| `5001` | `Microsoft-Windows-Windows`<br/>`Defender/Operational` | Real-time protection disabled. |
+| `5004` | `Microsoft-Windows-Windows`<br/>`Defender/Operational` | Real-time protection configuration changed. |
+| `5007` | `Microsoft-Windows-Windows`<br/>`Defender/Operational` | Defender configuration changed. |
+| `5010` | `Microsoft-Windows-Windows`<br/>`Defender/Operational` | Scanning for malware and unwanted software is disabled. |
+| `5013` | `Microsoft-Windows-Windows`<br/>`Defender/Operational` | Tamper protection blocked a change to Defender settings. |
+
+## Windows Firewall
+
+Firewall rule and profile changes surface in the `Microsoft-Windows-Windows Firewall With Advanced Security/Firewall` event log and can be a strong lateral-movement indicator. Attackers routinely add inbound rules to open SMB, RDP, or WinRM for pivoting, disable profiles, or allow outbound traffic to stage C2 (T1562.004).
+
+| ID | Log | Description |
+| --- | --- | --- |
+| `2003` | `Microsoft-Windows-Windows Firewall`<br/>`With Advanced Security/Firewall` | Profile changed. |
+| `2097` / `2004` | `Microsoft-Windows-Windows Firewall`<br/>`With Advanced Security/Firewall` | Rule added to the exception list. |
+| `2099` / `2005` | `Microsoft-Windows-Windows Firewall`<br/>`With Advanced Security/Firewall` | Rule modified. |
+| `2052` / `2006` | `Microsoft-Windows-Windows Firewall`<br/>`With Advanced Security/Firewall` | Rule deleted from the exception list. |
+| `2009` | `Microsoft-Windows-Windows Firewall`<br/>`With Advanced Security/Firewall` | Firewall disabled for a profile. |
+| `2011` | `Microsoft-Windows-Windows Firewall`<br/>`With Advanced Security/Firewall` | Inbound connection allowed by a rule. |
+| `4946` / `4947` / `4948` | Security | Rule added, modified, or deleted. Requires *Audit MPSSVC Rule-Level Policy Change*. |
+
+<Callout type="note">
+  The modern 20xx-series IDs (`2052`, `2097`, `2099`, and neighbors) appear on current
+  Windows 10/11 builds and are poorly documented by Microsoft. Coverage varies by build
+  and policy configuration, so always check the event body in Event Viewer for the
+  authoritative description on your host, and don't be surprised if the exact ID your
+  environment logs for an action differs from what older references list.
+</Callout>
+
+## AppLocker
+
+[AppLocker](https://learn.microsoft.com/en-us/windows/security/application-security/application-control/app-control-for-business/applocker/applocker-overview) is the built-in Windows application control feature, and its events are split across four sub-channels under `Microsoft-Windows-AppLocker/*`:
+
+- `Microsoft-Windows-AppLocker/EXE and DLL`
+- `Microsoft-Windows-AppLocker/MSI and Script`
+- `Microsoft-Windows-AppLocker/Packaged app-Deployment`
+- `Microsoft-Windows-AppLocker/Packaged app-Execution`
+
+Even in audit-only mode these events reveal what users and attackers attempted to run, which makes them valuable forensic breadcrumbs regardless of whether enforcement is turned on.
+
+| ID | Log | Description |
+| --- | --- | --- |
+| `8002` | `Microsoft-Windows-AppLocker/EXE and DLL` | Executable allowed. |
+| `8003` | `Microsoft-Windows-AppLocker/EXE and DLL` | Executable would have been blocked (audit mode). |
+| `8004` | `Microsoft-Windows-AppLocker/EXE and DLL` | Executable blocked. |
+| `8005` | `Microsoft-Windows-AppLocker/MSI and Script` | Script or MSI allowed. |
+| `8006` | `Microsoft-Windows-AppLocker/MSI and Script` | Script or MSI would have been blocked (audit mode). |
+| `8007` | `Microsoft-Windows-AppLocker/MSI and Script` | Script or MSI blocked. |
+
+<Callout type="warning">
+  AppLocker's DLL rule collection is **off by default** even when EXE rules are enforcing,
+  so attackers who run code as a DLL (sideloading, `rundll32`, any AppLocker-allowed loader)
+  often operate entirely outside AppLocker's view. The absence of block events doesn't mean
+  nothing got through.
+</Callout>
+
+## Sysmon essentials
+
+[Sysmon](https://learn.microsoft.com/en-us/sysinternals/downloads/sysmon) (System Monitor) is a Sysinternals tool that extends Windows' native logging with detailed process, network, file, registry, and image-load telemetry, and it is arguably the single most valuable telemetry source on a Windows host once properly configured. 
+
+Sysmon events are found in `Microsoft-Windows-Sysmon/Operational`, but default installs provide little investigative value. Community baselines like [SwiftOnSecurity's `sysmon-config`](https://github.com/SwiftOnSecurity/sysmon-config) and [Olaf Hartong's `sysmon-modular`](https://github.com/olafhartong/sysmon-modular) are a very approachable starting point for organizations of any size.
+
+<GitHubCard repo="SwiftOnSecurity/sysmon-config" />
+
+<GitHubCard repo="olafhartong/sysmon-modular" />
+
+| ID | Description |
+| --- | --- |
+| `1` | Process create (hashes, command line, parent, user, and integrity level). |
+| `3` | Network connection (per-process). |
+| `6` | Driver loaded (BYOVD signal when paired with signature and hash context). |
+| `7` | Image (DLL) loaded. |
+| `8` | CreateRemoteThread (process injection, T1055). |
+| `10` | ProcessAccess (handle opens, LSASS access detection lives here). |
+| `11` | FileCreate. |
+| `12` / `13` / `14` | Registry event (object create and delete / value set / key and value rename). |
+| `22` | DNSEvent (per-process DNS queries). |
+| `25` | ProcessTampering (process hollowing / herpaderping). |
+
+For the complete list of Sysmon event IDs, see the [Sysmon documentation](https://learn.microsoft.com/en-us/sysinternals/downloads/sysmon#events).
+
+<Callout type="note">
+  Historically Sysmon has had to be rolled out to every host as a standalone Sysinternals
+  binary, which is its biggest operational hurdle. Microsoft has
+  [announced native Sysmon functionality for Windows 11 and Windows Server 2025](https://techcommunity.microsoft.com/blog/windows-itpro-blog/native-sysmon-functionality-coming-to-windows/4468112)
+  rolling out through 2026, which should remove the packaging and update friction that
+  has kept Sysmon out of many environments.
+</Callout>
+
+## References
+
+- MITRE ATT&CK:
+  [attack.mitre.org](https://attack.mitre.org/)
+- Microsoft Security Auditing reference:
+  [learn.microsoft.com/windows/security/threat-protection/auditing/](https://learn.microsoft.com/en-us/windows/security/threat-protection/auditing/)
+- JPCERT/CC, *Detecting Lateral Movement through Tracking Event Logs*:
+  [jpcert.or.jp/english/pub/sr/ir_research.html](https://www.jpcert.or.jp/english/pub/sr/ir_research.html)
+- Sysmon documentation:
+  [learn.microsoft.com/sysinternals/downloads/sysmon](https://learn.microsoft.com/en-us/sysinternals/downloads/sysmon)
+- SwiftOnSecurity Sysmon config:
+  [github.com/SwiftOnSecurity/sysmon-config](https://github.com/SwiftOnSecurity/sysmon-config)
+- Olaf Hartong, *sysmon-modular*:
+  [github.com/olafhartong/sysmon-modular](https://github.com/olafhartong/sysmon-modular)
+- Microsoft Learn, *4946(S): A rule was added to the Windows Firewall exception list*:
+  [learn.microsoft.com/.../event-4946](https://learn.microsoft.com/en-us/previous-versions/windows/it-pro/windows-10/security/threat-protection/auditing/event-4946)
+- Ultimate Windows Security, *Event ID 4948, rule deleted*:
+  [ultimatewindowssecurity.com/.../event.aspx?eventid=4948](https://www.ultimatewindowssecurity.com/securitylog/encyclopedia/event.aspx?eventid=4948)
+- Sigma / Detection.FYI, *A rule has been deleted from the Windows Firewall exception list*:
+  [detection.fyi/.../win_firewall_as_delete_rule](https://detection.fyi/sigmahq/sigma/windows/builtin/firewall_as/win_firewall_as_delete_rule/)
+- Microsoft Learn, *4624(S): An account was successfully logged on*:
+  [learn.microsoft.com/.../event-4624](https://learn.microsoft.com/en-us/windows/security/threat-protection/auditing/event-4624)
+- Microsoft Learn, *4625(F): An account failed to log on*:
+  [learn.microsoft.com/.../event-4625](https://learn.microsoft.com/en-us/windows/security/threat-protection/auditing/event-4625)
+- Microsoft Support, *PowerShell 2.0 removal from Windows*:
+  [support.microsoft.com/.../powershell-2-0-removal](https://support.microsoft.com/en-us/topic/powershell-2-0-removal-from-windows-fe6d1edc-2ed2-4c33-b297-afe82a64200a)
+- Microsoft Learn, *Microsoft recommended driver block rules*:
+  [learn.microsoft.com/.../microsoft-recommended-driver-block-rules](https://learn.microsoft.com/en-us/windows/security/application-security/application-control/windows-defender-application-control/design/microsoft-recommended-driver-block-rules)
+- Microsoft Learn, *Just Enough Administration (JEA) overview*:
+  [learn.microsoft.com/.../jea/overview](https://learn.microsoft.com/en-us/powershell/scripting/security/remoting/jea/overview)
+- Microsoft Learn, *Troubleshoot Microsoft Defender Antivirus event IDs*:
+  [learn.microsoft.com/.../troubleshoot-microsoft-defender-antivirus](https://learn.microsoft.com/en-us/defender-endpoint/troubleshoot-microsoft-defender-antivirus)
+- Microsoft Learn, *AppLocker overview*:
+  [learn.microsoft.com/.../applocker-overview](https://learn.microsoft.com/en-us/windows/security/application-security/application-control/app-control-for-business/applocker/applocker-overview)
+- Microsoft Tech Community, *Native Sysmon functionality coming to Windows*:
+  [techcommunity.microsoft.com/.../4468112](https://techcommunity.microsoft.com/blog/windows-itpro-blog/native-sysmon-functionality-coming-to-windows/4468112)

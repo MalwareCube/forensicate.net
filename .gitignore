@@ -1,0 +1,20 @@
+dist/
+.astro/
+node_modules/
+npm-debug.log*
+.env
+.env.production
+.DS_Store
+
+# editor / agent state
+.claude/
+.vscode/
+.idea/
+*.swp
+
+# build scratch
+.favicon-tmp/
+
+# OS junk
+Thumbs.db
+desktop.ini

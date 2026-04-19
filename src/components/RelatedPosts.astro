@@ -1,0 +1,23 @@
+---
+import type { Post } from '~/lib/posts';
+import { getAllPosts, relatedPosts, postPath, formatDate } from '~/lib/posts';
+
+interface Props { post: Post; count?: number; }
+const { post, count = 3 } = Astro.props;
+
+const all = await getAllPosts();
+const related = relatedPosts(post, all, count);
+---
+{related.length > 0 && (
+  <section class="related" aria-label="Related posts">
+    <h3>Related posts</h3>
+    <ul>
+      {related.map((r) => (
+        <li>
+          <span class="date">{formatDate(r.data.pubDate)}</span>
+          <a href={postPath(r)}>{r.data.title}</a>
+        </li>
+      ))}
+    </ul>
+  </section>
+)}

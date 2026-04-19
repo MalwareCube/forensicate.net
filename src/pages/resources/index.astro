@@ -1,0 +1,73 @@
+---
+import BaseLayout from '~/layouts/BaseLayout.astro';
+import { resources, page, type ResourceEntry } from '~/resources.config';
+
+function isExternal(url: string): boolean {
+  return /^https?:\/\//i.test(url);
+}
+
+const grouped: { category: string; items: ResourceEntry[] }[] = [];
+for (const r of resources) {
+  let bucket = grouped.find((g) => g.category === r.category);
+  if (!bucket) { bucket = { category: r.category, items: [] }; grouped.push(bucket); }
+  bucket.items.push(r);
+}
+---
+<BaseLayout title={page.title} description={page.description}>
+  <h1>{page.title}</h1>
+  <p>{page.intro}</p>
+
+  {grouped.length === 0 && <p>{page.empty}</p>}
+
+  {grouped.map((g) => (
+    <section class="resource-group">
+      <h2>{g.category}</h2>
+      <ul class="resource-list">
+        {g.items.map((r) => (
+          <li>
+            {r.badge && <span class="resource-badge">{r.badge}</span>}
+            <a href={r.url} {...(isExternal(r.url) ? { target: '_blank', rel: 'noopener noreferrer' } : {})}>
+              {r.title}
+            </a>
+            {r.description && <span class="resource-desc"> {r.description}</span>}
+          </li>
+        ))}
+      </ul>
+    </section>
+  ))}
+</BaseLayout>
+
+<style>
+  .resource-group { margin-top: 1.2em; }
+  .resource-group h2 { margin-bottom: 0.2em; }
+  .resource-list {
+    list-style: none;
+    padding: 0;
+    margin: 0.3em 0 0;
+  }
+  .resource-list li {
+    padding: 0.45em 0;
+    line-height: 1.5;
+  }
+  .resource-list li + li {
+    border-top: 1px dotted var(--border-soft);
+  }
+  .resource-desc {
+    color: var(--text-muted);
+    margin-left: 0.3em;
+  }
+  .resource-badge {
+    display: inline-block;
+    font-family: var(--sans);
+    font-size: 0.7em;
+    font-weight: normal;
+    padding: 0.1em 0.55em;
+    margin-right: 0.5em;
+    border: 1px solid var(--border);
+    background: #fff;
+    color: var(--text-muted);
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+    vertical-align: middle;
+  }
+</style>

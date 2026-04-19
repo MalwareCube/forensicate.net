@@ -1,0 +1,28 @@
+---
+import { getAllPosts, tagCounts, tagPath } from '~/lib/posts';
+import { sidebarTagLimit } from '~/site.config';
+
+const all = tagCounts(await getAllPosts());
+const visible = all.slice(0, sidebarTagLimit);
+const hiddenCount = all.length - visible.length;
+const max = visible.reduce((m, c) => Math.max(m, c.count), 1);
+function sizeClass(count: number): string {
+  const ratio = count / max;
+  if (ratio > 0.75) return 'size-4';
+  if (ratio > 0.5) return 'size-3';
+  if (ratio > 0.25) return 'size-2';
+  return 'size-1';
+}
+---
+<section class="widget">
+  <h3><a href="/tags/">Tags</a></h3>
+  <div class="tag-cloud">
+    {visible.map((c) => (
+      <a href={tagPath(c.tag)} class={sizeClass(c.count)}>{c.tag} <span class="muted">({c.count})</span></a>
+    ))}
+    {all.length === 0 && <span class="muted">No tags yet.</span>}
+  </div>
+  {hiddenCount > 0 && (
+    <p class="tag-more"><a href="/tags/">{hiddenCount} more…</a></p>
+  )}
+</section>

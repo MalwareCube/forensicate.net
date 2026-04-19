@@ -1,0 +1,18 @@
+---
+import { getAllPosts, postPath, formatDate } from '~/lib/posts';
+import { site } from '~/site.config';
+
+const posts = (await getAllPosts()).slice(0, site.sidebarRecentCount);
+---
+<section class="widget">
+  <h3><a href="/posts/">Recent Posts</a></h3>
+  <ul>
+    {posts.map((p) => (
+      <li>
+        <a href={postPath(p)}>{p.data.title}</a>
+        <div class="muted">{formatDate(p.data.pubDate)}</div>
+      </li>
+    ))}
+    {posts.length === 0 && <li class="muted">No posts yet.</li>}
+  </ul>
+</section>
