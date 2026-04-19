@@ -41,7 +41,7 @@ a {
 a:visited { color: var(--link-visited); }
 a:hover, a:focus { text-decoration: underline; color: var(--link-hover); }
 
-a[target="_blank"]::after { content: " \2197"; }
+a[target="_blank"]::after { content: " \2197\FE0E"; }
 a[target="_blank"]:has(> svg:only-child)::after,
 a[target="_blank"]:has(> img:only-child)::after { content: none; }
 
