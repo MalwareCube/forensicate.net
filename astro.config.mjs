@@ -6,6 +6,7 @@ import rehypeSlug from 'rehype-slug';
 import rehypeAutolinkHeadings from 'rehype-autolink-headings';
 import remarkGfm from 'remark-gfm';
 import rehypeAutolinkIds from './src/lib/rehype-autolink-ids.mjs';
+import rehypeWrapTables from './src/lib/rehype-wrap-tables.mjs';
 import rehypeExternalLinks from 'rehype-external-links';
 import fs from 'node:fs';
 import path from 'node:path';
@@ -55,6 +56,7 @@ export default defineConfig({
         },
       ],
       rehypeAutolinkIds,
+      rehypeWrapTables,
       [
         rehypeExternalLinks,
         {

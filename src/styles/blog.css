@@ -205,7 +205,8 @@ a.data-footnote-backref:hover::after, a.data-footnote-backref:focus::after { tex
 
 /* Post page */
 .post-title { margin-top: 0; }
-.post-body { margin-top: 0.6em; }
+.post-body { margin-top: 0.6em; overflow-wrap: break-word; }
+.post-body iframe { max-width: 100%; }
 .post-body mark {
   background: #fff3b0;
   color: inherit;
@@ -216,6 +217,12 @@ a.data-footnote-backref:hover::after, a.data-footnote-backref:focus::after { tex
 }
 .post-body img { display: block; margin: 1em auto; border: 1px solid var(--border-soft); }
 
+.post-body .table-wrap {
+  margin: 1.2em 0;
+  overflow-x: auto;
+  -webkit-overflow-scrolling: touch;
+}
+.post-body .table-wrap > table { margin: 0; }
 .post-body table {
   border-collapse: collapse;
   margin: 1.2em 0;

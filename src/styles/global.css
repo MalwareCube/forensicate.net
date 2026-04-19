@@ -148,6 +148,7 @@ blockquote {
   background: #fafafa;
 }
 
+kbd { white-space: normal; overflow-wrap: anywhere; }
 code, pre, kbd, samp {
   font-family: var(--mono);
   font-size: 0.92em;
@@ -171,6 +172,8 @@ kbd {
   padding: 0.1em 0.35em;
   border: 1px solid var(--border-soft);
   border-radius: 2px;
+  white-space: normal;
+  overflow-wrap: anywhere;
 }
 pre {
   padding: 0.9em 1em;
@@ -280,6 +283,22 @@ h4:hover .heading-anchor { opacity: 1; }
   background: #222;
   margin: 4px 0;
 }
+.site-nav-clock {
+  display: none;
+  font-family: var(--mono);
+  font-size: 0.95rem;
+  letter-spacing: 0.05em;
+  color: var(--text);
+  white-space: nowrap;
+  margin-left: auto;
+}
+.site-nav-clock-label {
+  font-family: var(--sans);
+  font-size: 0.75em;
+  color: var(--text-muted);
+  letter-spacing: 0.1em;
+  margin-left: 0.25em;
+}
 .site-nav ul {
   list-style: none;
   padding: 0;
@@ -317,6 +336,7 @@ h4:hover .heading-anchor { opacity: 1; }
 @media (max-width: 640px) {
   .site-nav-inner { flex-wrap: wrap; gap: 0.6em; }
   .nav-toggle { display: inline-block; }
+  .site-nav-clock { display: inline-block; }
   .site-nav-menu {
     display: none;
     flex-basis: 100%;

@@ -22,31 +22,10 @@ function isCurrent(href: string): boolean {
       <p class="site-tagline">{site.tagline}</p>
     </div>
     <div class="site-clock" aria-label="Current UTC time">
-      <time id="utc-clock-time">--:--:--</time> <span class="site-clock-label">UTC</span>
+      <time class="utc-clock-time">--:--:--</time> <span class="site-clock-label">UTC</span>
     </div>
   </div>
 </header>
-
-<script is:inline>
-  (function () {
-    const timeEl = document.getElementById('utc-clock-time');
-    if (!timeEl) return;
-    function pad(n) { return n.toString().padStart(2, '0'); }
-    function tick() {
-      const d = new Date();
-      const yyyy = d.getUTCFullYear();
-      const mm = pad(d.getUTCMonth() + 1);
-      const dd = pad(d.getUTCDate());
-      const hh = pad(d.getUTCHours());
-      const mi = pad(d.getUTCMinutes());
-      const ss = pad(d.getUTCSeconds());
-      timeEl.textContent = `${hh}:${mi}:${ss}`;
-      timeEl.setAttribute('datetime', `${yyyy}-${mm}-${dd}T${hh}:${mi}:${ss}Z`);
-    }
-    tick();
-    setInterval(tick, 1000);
-  })();
-</script>
 
 <style>
   .site-banner-inner {
@@ -70,7 +49,7 @@ function isCurrent(href: string): boolean {
     letter-spacing: 0.1em;
     margin-left: 0.2em;
   }
-  @media (max-width: 520px) {
+  @media (max-width: 640px) {
     .site-clock { display: none; }
   }
 </style>
@@ -87,6 +66,9 @@ function isCurrent(href: string): boolean {
       <span class="nav-toggle-bar"></span>
       <span class="nav-toggle-bar"></span>
     </button>
+    <div class="site-nav-clock" aria-label="Current UTC time">
+      <time class="utc-clock-time">--:--:--</time> <span class="site-nav-clock-label">UTC</span>
+    </div>
     <div id="site-nav-menu" class="site-nav-menu">
       <ul>
         {nav.map((link) => (
@@ -106,6 +88,22 @@ function isCurrent(href: string): boolean {
 
 <script is:inline>
   (function () {
+    const timeEls = document.querySelectorAll('.utc-clock-time');
+    if (timeEls.length) {
+      const pad = (n) => n.toString().padStart(2, '0');
+      const tick = () => {
+        const d = new Date();
+        const text = `${pad(d.getUTCHours())}:${pad(d.getUTCMinutes())}:${pad(d.getUTCSeconds())}`;
+        const iso = `${d.getUTCFullYear()}-${pad(d.getUTCMonth() + 1)}-${pad(d.getUTCDate())}T${text}Z`;
+        timeEls.forEach((el) => {
+          el.textContent = text;
+          el.setAttribute('datetime', iso);
+        });
+      };
+      tick();
+      setInterval(tick, 1000);
+    }
+
     const nav = document.querySelector('.site-nav');
     const btn = nav && nav.querySelector('.nav-toggle');
     if (!nav || !btn) return;

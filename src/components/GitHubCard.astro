@@ -117,6 +117,7 @@ const fallbackUrl = `https://github.com/${repo}`;
     align-items: center;
     gap: 0.45em;
     margin-bottom: 0.55em;
+    min-width: 0;
   }
   .gh-card-icon {
     color: #636c76;
@@ -126,6 +127,8 @@ const fallbackUrl = `https://github.com/${repo}`;
     font-size: 0.95em;
     color: #0969da;
     font-weight: 500;
+    min-width: 0;
+    overflow-wrap: anywhere;
   }
   .gh-card-owner { font-weight: 400; }
   .gh-card-sep { margin: 0 0.15em; font-weight: 400; }
