@@ -52,7 +52,6 @@ export const socials: SocialLink[] = [
 
 export const sidebarTagLimit = 15;
 
-// Fill after installing the giscus GitHub App on the repo.
 // See https://giscus.app to generate the IDs.
 export const giscus: GiscusConfig = {
   enabled: false,
