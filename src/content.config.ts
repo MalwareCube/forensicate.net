@@ -12,6 +12,7 @@ const posts = defineCollection({
     categories: z.array(z.string()).default([]),
     draft: z.boolean().default(false),
     unlisted: z.boolean().default(false),
+    comments: z.boolean().default(true),
     banner: z.union([image(), z.string().url()]).optional(),
     bannerAlt: z.string().optional(),
     bannerCaption: z.string().optional(),

@@ -243,8 +243,12 @@ export function excerpt(post: Post, max = 240): string {
   if (post.data.description) return post.data.description;
   const body = (post.body ?? '').replace(/^---[\s\S]*?---/, '');
   const stripped = body
+    .replace(/^\s*(?:import|export)\s[\s\S]*?;?\s*$/gm, '')
     .replace(/```[\s\S]*?```/g, '')
+    .replace(/<\/?[A-Z][A-Za-z0-9]*[\s\S]*?\/?>/g, '')
+    .replace(/\{[^{}]*\}/g, '')
     .replace(/!?\[([^\]]*)\]\([^)]*\)/g, '$1')
+    .replace(/\[\^[^\]]+\]/g, '')
     .replace(/[#*_>`~]/g, '')
     .replace(/\s+/g, ' ')
     .trim();

@@ -94,7 +94,7 @@ const jsonLd = {
 
     <RelatedPosts post={post} />
 
-    <Giscus />
+    {post.data.comments && <Giscus />}
   </article>
 </BaseLayout>
 

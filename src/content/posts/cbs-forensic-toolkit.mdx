@@ -9,7 +9,7 @@ updatedDate: 2026-04-14
 
 The Windows 11 Start Menu is not the simple program launcher it once was. It is a search-driven interface powered by a dedicated UWP package, `MicrosoftWindows.Client.CBS_cw5n1h2txyewy` (the "CBS package"), which maintains its own local data stores to serve search results, track user preferences, and cache web content. In doing so, it quietly produces a collection of forensic artifacts that existing tools do not parse.
 
-[CBS Forensic Toolkit](https://github.com/exfiltrace-labs/cbs_parser) extracts three such artifact sources from the CBS package, each with meaningful forensic value.
+I put together the [CBS Forensic Toolkit](https://github.com/exfiltrace-labs/cbs_parser) to parse and extract a number of artifact sources from the CBS package, each with meaningful forensic value.
 
 ## IndexedDB (LevelDB)
 

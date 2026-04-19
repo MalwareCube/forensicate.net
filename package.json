@@ -8,7 +8,8 @@
     "start": "astro dev",
     "build": "astro build && pagefind --site dist",
     "preview": "astro preview",
-    "astro": "astro"
+    "astro": "astro",
+    "new-post": "node scripts/new-post.mjs"
   },
   "dependencies": {
     "@astrojs/mdx": "^4.0.0",
@@ -28,6 +29,7 @@
     "uplot": "^1.6.32"
   },
   "devDependencies": {
+    "@clack/prompts": "^1.2.0",
     "pagefind": "^1.5.2",
     "png-to-ico": "^3.0.1",
     "rehype-external-links": "^3.0.0",

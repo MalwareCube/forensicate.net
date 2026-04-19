@@ -54,9 +54,9 @@ export const sidebarTagLimit = 15;
 
 // See https://giscus.app to generate the IDs.
 export const giscus: GiscusConfig = {
-  enabled: false,
-  repo: 'malwarecube/forensicate',
-  repoId: 'REPLACE_WITH_REPO_ID',
+  enabled: true,
+  repo: 'malwarecube/forensicate.net',
+  repoId: 'R_kgDOSGgsUA',
   category: 'Comments',
-  categoryId: 'REPLACE_WITH_CATEGORY_ID',
+  categoryId: 'DIC_kwDOSGgsUM4C7NVe',
 };
