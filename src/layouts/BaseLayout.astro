@@ -6,23 +6,33 @@ import SiteFooter from '~/components/SiteFooter.astro';
 import Sidebar from '~/components/Sidebar.astro';
 import { site } from '~/site.config';
 
+interface ArticleMeta {
+  publishedTime?: string;
+  modifiedTime?: string;
+  author?: string;
+  tags?: string[];
+}
+
 interface Props {
   title?: string;
   description?: string;
   ogType?: 'website' | 'article';
   ogImage?: string;
+  articleMeta?: ArticleMeta;
   jsonLd?: unknown;
   theatreAllowed?: boolean;
   frontmatter?: { title?: string; description?: string };
 }
 
-const { ogType = 'website', ogImage, jsonLd, theatreAllowed = false, frontmatter } = Astro.props;
+const { ogType = 'website', articleMeta, jsonLd, theatreAllowed = false, frontmatter } = Astro.props;
 const fm = frontmatter ?? {};
 const title = Astro.props.title ?? fm.title;
 const description = Astro.props.description ?? fm.description;
 const pageTitle = title ? `${title} | ${site.author}` : site.author;
 const pageDesc = description ?? site.description;
 const canonical = new URL(Astro.url.pathname, site.url).toString();
+const ogImage = Astro.props.ogImage ?? new URL('/og.png', site.url).toString();
+const ogLocale = site.lang === 'en' ? 'en_CA' : site.lang;
 ---
 <!DOCTYPE html>
 <html lang={site.lang}>
@@ -45,14 +55,27 @@ const canonical = new URL(Astro.url.pathname, site.url).toString();
     <meta property="og:description" content={pageDesc} />
     <meta property="og:type" content={ogType} />
     <meta property="og:url" content={canonical} />
-    {ogImage && <meta property="og:image" content={ogImage} />}
-    {ogImage && <meta property="og:image:secure_url" content={ogImage} />}
-    {ogImage && <meta property="og:image:type" content="image/png" />}
-    {ogImage && <meta property="og:image:width" content="1200" />}
-    {ogImage && <meta property="og:image:height" content="630" />}
-    {ogImage && <meta property="og:image:alt" content={title ?? site.title} />}
-    <meta name="twitter:card" content={ogImage ? 'summary_large_image' : 'summary'} />
-    {ogImage && <meta name="twitter:image" content={ogImage} />}
+    <meta property="og:locale" content={ogLocale} />
+    <meta property="og:image" content={ogImage} />
+    <meta property="og:image:secure_url" content={ogImage} />
+    <meta property="og:image:type" content="image/png" />
+    <meta property="og:image:width" content="1200" />
+    <meta property="og:image:height" content="630" />
+    <meta property="og:image:alt" content={title ?? site.title} />
+    {ogType === 'article' && articleMeta?.publishedTime && (
+      <meta property="article:published_time" content={articleMeta.publishedTime} />
+    )}
+    {ogType === 'article' && articleMeta?.modifiedTime && (
+      <meta property="article:modified_time" content={articleMeta.modifiedTime} />
+    )}
+    {ogType === 'article' && articleMeta?.author && (
+      <meta property="article:author" content={articleMeta.author} />
+    )}
+    {ogType === 'article' && articleMeta?.tags?.map((t) => (
+      <meta property="article:tag" content={t} />
+    ))}
+    <meta name="twitter:card" content="summary_large_image" />
+    <meta name="twitter:image" content={ogImage} />
     <meta name="generator" content={Astro.generator} />
     {jsonLd && <script type="application/ld+json" set:html={JSON.stringify(jsonLd)} />}
   </head>

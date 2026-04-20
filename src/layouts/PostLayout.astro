@@ -48,6 +48,12 @@ const jsonLd = {
   description={metaDescription}
   ogType="article"
   ogImage={ogImage}
+  articleMeta={{
+    publishedTime: pubDate.toISOString(),
+    modifiedTime: updatedDate?.toISOString(),
+    author: site.author,
+    tags,
+  }}
   jsonLd={jsonLd}
   theatreAllowed
 >
