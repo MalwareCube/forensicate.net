@@ -2,26 +2,11 @@ import type { APIRoute } from 'astro';
 import type { ImageMetadata } from 'astro';
 import { readFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
-import path from 'node:path';
 import satori from 'satori';
 import { Resvg } from '@resvg/resvg-js';
 import sharp from 'sharp';
 import { getRoutablePosts, formatDate } from '~/lib/posts';
 import { site } from '~/site.config';
-
-const bannerBuffers = import.meta.glob<ArrayBuffer>(
-  '/src/content/posts/**/*.{png,jpg,jpeg,webp,gif}',
-  { eager: true, query: '?arraybuffer', import: 'default' },
-);
-const bannerMetas = import.meta.glob<{ default: ImageMetadata }>(
-  '/src/content/posts/**/*.{png,jpg,jpeg,webp,gif}',
-  { eager: true },
-);
-const processedSrcToBuffer = new Map<string, ArrayBuffer>();
-for (const [p, mod] of Object.entries(bannerMetas)) {
-  const buf = bannerBuffers[p];
-  if (mod?.default?.src && buf) processedSrcToBuffer.set(mod.default.src, buf);
-}
 
 const loadFont = (rel: string) =>
   readFileSync(fileURLToPath(new URL(`../../../node_modules/${rel}`, import.meta.url)));
@@ -43,9 +28,8 @@ async function loadBannerDataUrl(banner: ImageMetadata | string): Promise<string
       if (!res.ok) return null;
       return await toPngDataUrl(Buffer.from(await res.arrayBuffer()));
     }
-    const raw = processedSrcToBuffer.get(banner.src);
-    if (!raw) return null;
-    return await toPngDataUrl(Buffer.from(raw));
+    if (!banner.fsPath) return null;
+    return await toPngDataUrl(readFileSync(banner.fsPath));
   } catch {
     return null;
   }
