@@ -403,6 +403,7 @@ body.theatre aside.sidebar { display: none; }
   aside.sidebar { order: 2; }
   main.main { padding: 1.1em 1.1em; }
   .site-title { font-size: 1.7em; }
+  .theatre-toggle-wrap { display: none; }
 }
 
 /* Footer */

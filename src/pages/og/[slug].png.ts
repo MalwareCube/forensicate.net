@@ -5,6 +5,7 @@ import { fileURLToPath } from 'node:url';
 import path from 'node:path';
 import satori from 'satori';
 import { Resvg } from '@resvg/resvg-js';
+import sharp from 'sharp';
 import { getRoutablePosts, formatDate } from '~/lib/posts';
 import { site } from '~/site.config';
 
@@ -29,13 +30,9 @@ const sansRegular = loadFont('@fontsource/ibm-plex-sans/files/ibm-plex-sans-lati
 const sansBold = loadFont('@fontsource/ibm-plex-sans/files/ibm-plex-sans-latin-700-normal.woff');
 const serifBold = loadFont('@fontsource/ibm-plex-serif/files/ibm-plex-serif-latin-700-normal.woff');
 
-function mimeFromFormat(format: string): string {
-  const f = format.toLowerCase();
-  if (f === 'jpg' || f === 'jpeg') return 'image/jpeg';
-  if (f === 'webp') return 'image/webp';
-  if (f === 'gif') return 'image/gif';
-  if (f === 'svg') return 'image/svg+xml';
-  return 'image/png';
+async function toPngDataUrl(buf: Buffer): Promise<string> {
+  const png = await sharp(buf).png().toBuffer();
+  return `data:image/png;base64,${png.toString('base64')}`;
 }
 
 async function loadBannerDataUrl(banner: ImageMetadata | string): Promise<string | null> {
@@ -44,15 +41,11 @@ async function loadBannerDataUrl(banner: ImageMetadata | string): Promise<string
       if (!/^https?:\/\//i.test(banner)) return null;
       const res = await fetch(banner);
       if (!res.ok) return null;
-      const ct = res.headers.get('content-type');
-      const mime = ct ? ct.split(';')[0].trim() : 'image/png';
-      const buf = Buffer.from(await res.arrayBuffer());
-      return `data:${mime};base64,${buf.toString('base64')}`;
+      return await toPngDataUrl(Buffer.from(await res.arrayBuffer()));
     }
     const raw = processedSrcToBuffer.get(banner.src);
     if (!raw) return null;
-    const buf = Buffer.from(raw);
-    return `data:${mimeFromFormat(banner.format)};base64,${buf.toString('base64')}`;
+    return await toPngDataUrl(Buffer.from(raw));
   } catch {
     return null;
   }

@@ -1,0 +1,175 @@
+---
+title: "Threat hunting is more than \"finding evil\""
+description: "A common misconception about threat hunting is that its purpose is to surface adversaries hiding in your environment. That's one possible outcome, and in a healthy program, it's the rarest of the three."
+pubDate: 2026-04-20
+tags: ["threat-hunting", "detection-engineering", "soc", "defense"]
+categories: ["Opinion"]
+banner: "./banners/more-than-finding-evil.jpg"
+bannerAlt: "A close-up photograph of a spider spinning a web"
+---
+
+Ask most people about the purpose of *threat hunting* (please, please don't call it *thrunting*), and you will get some version of the same answer: **you are proactively searching your environment for adversaries that your automated detections have not caught**. That story sells well in vendor pitches and isn't exactly *wrong*, but it abstracts the totality of what a threat hunting program produces.
+
+I often propose that a threat hunt has **three main outcomes**. Finding evil is only *one* of them, and in a well-run security program, it's actually the *least common* of the three.
+
+## The three outcomes
+
+Every threat hunt, if executed with any rigour, will produce at least one of the following:
+
+1. **An identified gap in your visibility, telemetry, or architecture.**
+2. **An improvement to your automated detection logic.**
+3. **Actual evidence of adversary activity.**
+
+People fixate on outcome **#3** because it *looks* like the most concrete measure of program success. A smoking-gun finding is easy to count and easy to report up. In reality, outcomes **#1** and **#2** are where an incredible amount of actionable intelligence gets generated in most mature environments, hunt after hunt.
+
+### Outcome 1: Gaps in visibility and architecture
+
+This is arguably the most common outcome of a hunt, and by far the most underrated. Imagine the following hunting scenario (*feel free to share if you've been here before*):
+
+After you've pulled your threat intelligence together and profiled the adversary, you've got a hypothesis you want to hunt for. You know exactly what you're looking for, but when you sit down to query your environment, you realise you can't. The data just isn't there. 
+
+Maybe the logs from that specific DMZ segment never made it to the SIEM. Maybe PowerShell script block logging was never turned on for that subset of hosts. Or your endpoint telemetry coverage stops at a business-unit boundary nobody's looked at in two years. Whatever the gap may be, you've effectively hit a wall before the hunt even begins.
+
+*Congratulations!* No, seriously. You just proactively surfaced an architectural problem *before* you needed that telemetry to answer the "what did the attacker do on this host?" question in the middle of a real incident.
+
+That's a win in and of itself. It's also a win with a compounding effect. Every visibility gap you close ahead of time is one you won't run into when the adversary is knocking down the door.
+
+### Outcome 2: Automated detections
+
+Always remember the **hunt-once principle**: if you hunt the same pattern twice, you didn't truly finish the first hunt. The structured threat hunting process produces the ingredients of an automated detection: 
+- A clearly articulated hypothesis
+- The data sources needed to test it
+- The normalisations and filters that make the signal readable
+- A definition of what "abnormal" looks like in your environment
+
+This is handed to you for FREE, already sitting there as a byproduct of the hunt you just ran! A detection engineer would otherwise have to build all of that from scratch. Don't throw it away.
+
+When you finish a hunt, your next question should be: *can I automate this?* If the answer is yes, and it usually is, the hunt shifts from a manual effort (requiring expensive human brain-power) to a machine-run scheduled query, an analytic, a Sigma rule, or a SOAR playbook trigger. The hunter's manual work feeds into the SOC's baseline detection capability.
+
+This is how a threat hunting program actually *improves* a SOC over time. It's *not always* by finding the evil your automated detections missed, but by feeding the intelligence that *builds* those detections in the first place.
+
+### Outcome 3: Finding evil
+
+Yes, of course. Sometimes you *actually* find something. It happens, and when it does, you kick off the incident response process. There is often not much time to pat yourself on the back. This is the outcome most people picture when they hear "threat hunting".
+
+But hopefully it isn't what you're actually finding most of the time. For most organizations, it isn't. If *every* hunt you run is finding malicious activity, you don't have a world-class threat hunting program. You have a world-class *detection* problem. 
+
+Active intrusions shouldn't be the routine output of a proactive program. If they are, something more fundamental has broken upstream, in your preventive controls, your automated detections, or both, and the fix isn't more hunting. The fix is fixing the fundamentals.
+
+## What to measure
+
+If you're standing up a threat hunting program (or trying to justify one that exists), the three outcomes should reshape what your dashboard reports. A program that only tracks intrusions caught is a program that *looks* like it fails most quarters, because you'll be pressured to justify its existence on the one metric it's least likely to move in a mature environment.
+
+Track all three outcomes in whatever way makes the most sense, and give the first two at least equal billing:
+
+- **Gaps surfaced and closed.** Every visibility, telemetry, or architectural gap a hunt identifies, with time-to-remediation tracked against each. This is a tangible indicator that your threat hunting team is actively *improving* the SOC. In mature environments, this is often your highest-volume metric, and it maps directly to risk reduction.
+- **Detections promoted.** Hunts that surfaced intelligence to power detection/correlation rules, scheduled analytics, or SOAR playbooks, along with what those detections buy you (which ATT&CK techniques they cover, which log sources feed them, and how actionable they are in practice).
+- **Findings handed off to IR.** The smoking-gun count, yes, but also hypotheses that were confidently ruled out, which are findings in their own right. Turn each one into an automated detection and nobody has to run the same hunt twice.
+
+Programs that only report the third number are more likely to get cut during the first cost-pressure cycle. Programs that report all three will more likely be recognised as the compounding investment they actually are.
+
+<Callout type="tip">
+  The [MITRE ATT&CK Navigator](https://mitre-attack.github.io/attack-navigator/) is a handy way to track detection gaps and coverage over time. By cataloguing the TTPs your detections cover, everything else becomes your hunt backlog. Keep it updated over time and you can track the progress the program is making.
+</Callout>
+
+## The structured threat hunting process
+
+A lot of the confusion about what threat hunting produces comes from conflating "hunting" with "poking around in the SIEM when we've got some time to spare." Maybe you've come across a repo of prebuilt hunt queries poised to solve all your threat hunting needs. That's great and all, but running someone else's queries against your environment isn't effective hunting. 
+
+A real hunt is methodical. Generally it looks like this:
+
+1. **Start with cyber threat intelligence.** You need a concrete idea of what real adversaries do and how they do it, prioritizing timely intel relevant to your industry.
+2. **Form a hypothesis.** State, in plain language, a specific adversary behaviour you want to look for in your environment.
+3. **Identify the evidence that behaviour would create.** Walk the hypothesis through your telemetry. What logs, what artifacts, and what process relationships would this produce in *your* org?
+4. **Hunt.** Query, transform, and stack the data by a pivot that maps to your hypothesis. Characterise what's normal and start pulling the threads of what isn't.
+5. **Close the loop.** Record any of the telemetry gaps you hit, build out any findings into automated detections, and if warranted, escalate to IR.
+
+### Putting it together: scheduled task persistence
+
+**Hypothesis:** An adversary has established persistence on one of our endpoints by creating a scheduled task that executes a payload at logon or on a recurring interval. 
+
+This is T1053.005, a technique that continues to show up across commodity and targeted intrusions because it just works.
+
+<Callout type="note">
+  Check the *Procedure Examples* section of [T1053.005](https://attack.mitre.org/techniques/T1053/005/) for a running list of real-world adversary tradecraft around this technique.
+</Callout>
+
+**What evidence would that create on our stack?**
+
+In this scenario, it entirely depends on your logging and EDR coverage, but on a reasonably instrumented Windows fleet, the (non-exhaustive) evidence looks something like:
+
+- Event ID `4698` (*A scheduled task was created*) in the `Security` channel, recording the task name, the creating user, and the full task XML.
+- Event IDs `106` and `140` in the `Microsoft-Windows-TaskScheduler/Operational` channel, capturing task registration and updates on a separate channel to the Security log.
+- A **file** written under `C:\Windows\System32\Tasks\` matching the task name, and a corresponding subkey under `HKLM\SOFTWARE\Microsoft\Windows NT\CurrentVersion\Schedule\TaskCache\Tree\`.
+- **Process creation** telemetry (`4688` in the `Security` channel, or `1` in `Microsoft-Windows-Sysmon/Operational`) showing `schtasks.exe`, or PowerShell cmdlets like `Register-ScheduledTask` and `New-ScheduledTask`, executing in proximity to the task creation.
+- **At trigger time**: another process creation event where the parent is the Task Scheduler service host (typically `svchost.exe -k netsvcs -p`, or `svchost.exe -k netsvcs -p -s Schedule` on modern Windows with service isolation, or `taskhostw.exe` for COM-hosted tasks) and the child is whatever the task actually runs.
+
+It's worth flagging what's off by default. The `Microsoft-Windows-TaskScheduler/Operational` channel has to be enabled, `Security` `4698` needs the *Audit Other Object Access Events* subcategory turned on, and `Security` `4688` needs *Audit Process Creation* plus a separate GPO to populate the command line.
+
+Again, this list is far from exhaustive. The point of walking through it isn't to catalogue every possible artifact, but rather to forecast what evidence *should* exist in your environment before you run a single query.
+
+<Callout type="note">
+  For a broader list of Windows event IDs of interest during incident response, see my [Windows event IDs for incident response](/posts/windows-event-ids-for-incident-response/) cheatsheet.
+</Callout>
+
+**Now hunt.** Pull `Security` `4698` events from across the fleet over a defined window. Enrich the data with the `SubjectUserName`/`SubjectUserSid` from the event (the identity that actually registered the task), the task's `<Author>` from the XML (attacker-controllable, so treat it as untrusted input and a useful mismatch check), the principal the task runs as, and the command line embedded in the task XML. Then look for the things that should not be there:
+
+- Tasks running as `SYSTEM` that were registered by a non-privileged user, or where the XML `<Author>` doesn't match the `SubjectUserName` on the event.
+- Command lines invoking interpreters (`cmd.exe`, `powershell.exe`, `wscript.exe`, `mshta.exe`, `regsvr32.exe`, or `rundll32.exe`) or pointing at payload paths in user-writable locations (`AppData`, `ProgramData`, `Public`, or `Temp`).
+- Tasks created outside your change window, on hosts that do not normally receive scheduled task deployments, or by accounts that have no business authoring tasks.
+- Clusters of identical tasks landing on multiple hosts in a short window, which is a strong lateral movement signal.
+
+That's more along the lines of a structured threat hunt. A hypothesis grounded in adversary behaviour, traced through the evidence your stack *should* produce, and tested deliberately.
+
+And notice how many opportunities there are along the way to hit outcomes **#1** and **#2**. Do you have all of those sources enabled, forwarded centrally, and retained for long enough to hunt over a meaningful window? Do you have process execution and command-line auditing turned on (if not already provided through your EDR)? Is your process creation telemetry complete enough to link an `schtasks.exe` invocation to its parent process? 
+
+Every one of those questions is a potential **gap finding**. And every successful pattern you characterise is a candidate for an automated detection.
+
+## Where this fits in active cyber defense
+
+A firewall and a stack of preventive controls isn't a security program. Every preventive control has a bypass, and adversaries are paid to find them. What closes the gap isn't more walls, it's an *active* posture: CTI feeding the SOC and the hunt team, both of them continuously refining detection and response, and IR feeding learnings back into everything upstream.
+
+The loop, roughly:
+
+- **CTI** tells you what is being done in the wild, to whom, and how.
+- That intel drives both **SOC detection engineering** (what to alert on) and **threat hunting** (what hypotheses to test for behaviours you can't yet alert on).
+- The **SOC** or the **threat hunt** surfaces anomalies worth investigating.
+- Those anomalies become **IR** engagements when warranted.
+- The output of IR is *more* CTI, this time about a specific adversary that has operated in *your* environment, and it loops back to sharpen the SOC's detections, the hunt team's hypotheses, and the CTI picture itself.
+
+<Mermaid curve="linear" caption="The active cyber defense feedback loop" code={`flowchart LR
+  CTI([Cyber Threat Intelligence])
+  SOC([SOC Detection Engineering])
+  HUNT([Threat Hunting])
+  IR([Incident Response])
+  CTI --> SOC
+  CTI --> HUNT
+  SOC --> IR
+  HUNT --> IR
+  IR -- new CTI --> CTI
+`} />
+
+For an effective active cyber defense program, nothing in that loop is optional, and nothing in it is one-directional. A threat hunting program that doesn't feed the SOC, and isn't fed by CTI and IR, improves nothing beyond itself. A SOC that isn't continuously sharpened by hunts and incidents is going to plateau, fast.
+
+## The takeaway
+
+If the only way you measure your threat hunting program is by counting the number of intrusions it catches, your measurements are too narrow, and you'll probably conclude the program isn't working when it actually is.
+
+Finding evil is the outcome that justifies the program to the organization. Finding gaps and building detections are the outcomes that make the program *worth having* between incidents. A healthy hunt team produces all three, in roughly inverse order of drama.
+
+## References
+
+- MITRE ATT&CK, *T1053.005: Scheduled Task*:
+  [attack.mitre.org/techniques/T1053/005](https://attack.mitre.org/techniques/T1053/005/)
+- MITRE ATT&CK Navigator:
+  [mitre-attack.github.io/attack-navigator](https://mitre-attack.github.io/attack-navigator/)
+- Microsoft Learn, *4698(S): A scheduled task was created*:
+  [learn.microsoft.com/.../event-4698](https://learn.microsoft.com/en-us/windows/security/threat-protection/auditing/event-4698)
+- Microsoft Learn, *4688(S): A new process has been created*:
+  [learn.microsoft.com/.../event-4688](https://learn.microsoft.com/en-us/windows/security/threat-protection/auditing/event-4688)
+- Sysmon documentation:
+  [learn.microsoft.com/sysinternals/downloads/sysmon](https://learn.microsoft.com/en-us/sysinternals/downloads/sysmon)
+- SigmaHQ, *generic signature format for SIEM systems*:
+  [github.com/SigmaHQ/sigma](https://github.com/SigmaHQ/sigma)
+- *Windows event IDs for incident response* cheatsheet:
+  [forensicate.net/posts/windows-event-ids-for-incident-response](/posts/windows-event-ids-for-incident-response/)

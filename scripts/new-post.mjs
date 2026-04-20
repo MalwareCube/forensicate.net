@@ -179,6 +179,8 @@ function componentStub(kind, opts = {}) {
       return `<LlmChat model="Assistant">\n  <LlmTurn role="user">\n    Your question here.\n  </LlmTurn>\n  <LlmTurn role="assistant">\n    The assistant's response.\n  </LlmTurn>\n</LlmChat>\n`;
     case 'githubCard':
       return `<GitHubCard repo="${opts.repo || 'owner/name'}" />\n`;
+    case 'mermaid':
+      return `<Mermaid caption="Optional caption" code={\`flowchart LR\n  A[Start] --> B[Next step]\n  B --> C[End]\n\`} />\n`;
     case 'references':
       return `## References\n\n- \n`;
     case 'footnote':
@@ -609,6 +611,11 @@ async function main() {
           value: 'githubCard',
           label: 'GitHubCard',
           hint: 'Live repo card',
+        },
+        {
+          value: 'mermaid',
+          label: 'Mermaid',
+          hint: 'Diagram rendered client-side',
         },
         {
           value: 'references',

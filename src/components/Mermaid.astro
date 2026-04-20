@@ -1,0 +1,158 @@
+---
+interface ThemeVars {
+  background?: string;
+  primaryColor?: string;
+  primaryTextColor?: string;
+  primaryBorderColor?: string;
+  lineColor?: string;
+  secondaryColor?: string;
+  secondaryTextColor?: string;
+  secondaryBorderColor?: string;
+  tertiaryColor?: string;
+  tertiaryTextColor?: string;
+  tertiaryBorderColor?: string;
+  noteBkgColor?: string;
+  noteTextColor?: string;
+  noteBorderColor?: string;
+  fontSize?: string;
+  [key: string]: string | undefined;
+}
+
+type Curve =
+  | 'basis'
+  | 'bumpX'
+  | 'bumpY'
+  | 'cardinal'
+  | 'catmullRom'
+  | 'linear'
+  | 'monotoneX'
+  | 'monotoneY'
+  | 'natural'
+  | 'step'
+  | 'stepAfter'
+  | 'stepBefore';
+
+interface Props {
+  code: string;
+  caption?: string;
+  className?: string;
+  theme?: ThemeVars;
+  fontFamily?: string;
+  curve?: Curve;
+}
+const { code, caption, className, theme, fontFamily, curve } = Astro.props;
+const themeAttr = theme ? JSON.stringify(theme) : undefined;
+const bgStyle = theme?.background ? `--mermaid-bg:${theme.background}` : undefined;
+---
+<figure class={`post-figure mermaid-figure${className ? ` ${className}` : ''}`}>
+  <pre
+    class="mermaid"
+    data-theme={themeAttr}
+    data-font-family={fontFamily}
+    data-curve={curve}
+    style={bgStyle}
+  >{code}</pre>
+  {caption && <figcaption>{caption}</figcaption>}
+</figure>
+
+<script>
+  import mermaid from 'mermaid';
+
+  const DEFAULT_FONT = 'Georgia, "Times New Roman", Cambria, serif';
+  const DEFAULT_THEME = {
+    background: '#ffffff',
+    primaryColor: '#ffffff',
+    primaryTextColor: '#1d1d1d',
+    primaryBorderColor: '#c8c8c8',
+    lineColor: '#666666',
+    secondaryColor: '#f3f3f3',
+    tertiaryColor: '#ffffff',
+    edgeLabelBackground: '#ffffff',
+    fontSize: '15px',
+  };
+
+  mermaid.initialize({
+    startOnLoad: false,
+    theme: 'base',
+    securityLevel: 'strict',
+    fontFamily: DEFAULT_FONT,
+    themeVariables: DEFAULT_THEME,
+    flowchart: { curve: 'linear' },
+  });
+
+  const render = async () => {
+    const nodes = document.querySelectorAll<HTMLElement>('pre.mermaid:not([data-processed])');
+    for (const node of nodes) {
+      const source = (node.textContent || '').trim();
+      if (!source) continue;
+
+      const themeOverride = node.getAttribute('data-theme');
+      const fontOverride = node.getAttribute('data-font-family');
+      const curveOverride = node.getAttribute('data-curve');
+
+      let directive = '';
+      if (themeOverride || fontOverride || curveOverride) {
+        const themeVars = themeOverride
+          ? { ...DEFAULT_THEME, ...JSON.parse(themeOverride) }
+          : DEFAULT_THEME;
+        const cfg: Record<string, unknown> = {
+          theme: 'base',
+          themeVariables: themeVars,
+        };
+        if (fontOverride) cfg.fontFamily = fontOverride;
+        if (curveOverride) cfg.flowchart = { curve: curveOverride };
+        directive = `%%{init: ${JSON.stringify(cfg)}}%%\n`;
+      }
+
+      const id = `mermaid-${Math.random().toString(36).slice(2, 10)}`;
+      try {
+        const { svg } = await mermaid.render(id, directive + source);
+        node.innerHTML = svg;
+        node.setAttribute('data-processed', 'true');
+      } catch (err) {
+        node.setAttribute('data-error', 'true');
+        node.textContent = source;
+        console.error('Mermaid render failed', err);
+      }
+    }
+  };
+
+  if (document.readyState === 'loading') {
+    document.addEventListener('DOMContentLoaded', render);
+  } else {
+    render();
+  }
+  document.addEventListener('astro:page-load', render);
+</script>
+
+<style is:global>
+  .mermaid-figure {
+    margin: 1.5em 0;
+    text-align: center;
+  }
+  .mermaid-figure pre.mermaid {
+    background: var(--mermaid-bg, var(--content-bg)) !important;
+    border: 1px solid var(--border);
+    padding: 2em 1em;
+    margin: 0;
+    font-family: var(--mono);
+    font-size: 0.85em;
+    color: var(--text-muted);
+    overflow-x: auto;
+    white-space: pre;
+  }
+  .mermaid-figure pre.mermaid[data-processed] {
+    font-family: inherit;
+    color: inherit;
+  }
+  .mermaid-figure pre.mermaid[data-processed] svg {
+    max-width: 100%;
+    height: auto;
+  }
+  .mermaid-figure figcaption {
+    margin-top: 0.5em;
+    font-size: 0.9em;
+    color: var(--text-muted);
+    font-style: italic;
+  }
+</style>

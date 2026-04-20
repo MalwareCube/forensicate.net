@@ -70,8 +70,10 @@ const jsonLd = {
           <span class="updated">updated {formatDate(updatedDate)}</span>
         </>
       )}
-      <span class="dot"> · </span>
-      <button type="button" class="theatre-toggle" data-theatre-toggle>reader mode</button>
+      <span class="theatre-toggle-wrap">
+        <span class="dot"> · </span>
+        <button type="button" class="theatre-toggle" data-theatre-toggle>reader mode</button>
+      </span>
     </p>
 
     <SeriesBox post={post} />
